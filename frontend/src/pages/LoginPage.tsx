@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
+import PasswordInput from "../components/PasswordInput";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
@@ -94,13 +95,7 @@ export default function LoginPage() {
         <input id="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
 
         <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <PasswordInput id="password" value={password} onChange={setPassword} autoComplete="current-password" required />
 
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={submitting}>

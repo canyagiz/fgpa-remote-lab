@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, getCaptcha, getCsrfToken, register } from "../api/client";
+import PasswordInput from "../components/PasswordInput";
+import PasswordStrength from "../components/PasswordStrength";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -18,10 +20,19 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
 
   async function loadCaptchaAndCsrf() {
-    const [captcha, csrf] = await Promise.all([getCaptcha(), getCsrfToken()]);
+    // Sequential on purpose: both endpoints mutate the session cookie
+    // (starlette's SessionMiddleware re-encodes the whole session on every
+    // response). Firing them in parallel races two Set-Cookie responses -
+    // whichever one the browser applies last silently wins, discarding the
+    // other endpoint's write. That's exactly the bug where a correct
+    // captcha answer got rejected: the CSRF and captcha writes stomped on
+    // each other and only one survived.
+    const captcha = await getCaptcha();
     setCaptchaQuestion(captcha.question);
-    setCsrfToken(csrf.token);
     setCaptchaAnswer("");
+
+    const csrf = await getCsrfToken();
+    setCsrfToken(csrf.token);
   }
 
   useEffect(() => {
@@ -88,23 +99,27 @@ export default function RegisterPage() {
         />
 
         <label htmlFor="password">Password</label>
-        <input
+        <PasswordInput
           id="password"
-          type="password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
+          autoComplete="new-password"
           minLength={8}
           required
         />
+        <PasswordStrength password={password} />
 
         <label htmlFor="confirmPassword">Confirm password</label>
-        <input
+        <PasswordInput
           id="confirmPassword"
-          type="password"
           value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
+          onChange={setConfirmPassword}
+          autoComplete="new-password"
           required
         />
+        {confirmPassword && password !== confirmPassword && (
+          <p className="error">Passwords don't match</p>
+        )}
 
         <label htmlFor="captcha">Security check: {captchaQuestion}</label>
         <input
