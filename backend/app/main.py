@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.models import Lab
-from app.routers import auth, labs, reservations
+from app.routers import auth, labs, reservations, users
 from app.services.queue import sweep_expired_reservations
 
 logger = logging.getLogger("fpga_remote_lab")
@@ -61,6 +61,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(labs.router)
 app.include_router(reservations.router)
+app.include_router(users.router)
 
 
 @app.get("/health")

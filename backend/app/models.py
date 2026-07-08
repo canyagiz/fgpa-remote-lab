@@ -58,6 +58,10 @@ class Reservation(Base):
     __tablename__ = "reservations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # No ondelete=CASCADE here on purpose: reservation history is an audit
+    # trail of lab usage, so deleting a user with past reservations should
+    # fail loudly (see routers/users.py::delete_user) rather than silently
+    # erasing that history.
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     lab_id: Mapped[int] = mapped_column(ForeignKey("labs.id"))
     reservation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -78,7 +82,7 @@ class TwoFactorCode(Base):
     __tablename__ = "two_factor_codes"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     code: Mapped[str] = mapped_column(String(6))
     type: Mapped[TwoFactorType] = mapped_column(Enum(TwoFactorType), default=TwoFactorType.email)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
