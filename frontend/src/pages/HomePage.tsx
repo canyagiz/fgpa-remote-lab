@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import HeroVideo from "../components/HeroVideo";
 import { useAuth } from "../context/AuthContext";
+import { useAuthDialog } from "../context/AuthDialogContext";
 
 export default function HomePage() {
   const { user } = useAuth();
+  const { openLogin, openRegister } = useAuthDialog();
 
   return (
     <div className="mx-auto max-w-5xl px-6">
@@ -22,11 +24,11 @@ export default function HomePage() {
             </Button>
           ) : (
             <>
-              <Button asChild size="lg">
-                <Link to="/register">Get started</Link>
+              <Button size="lg" onClick={openRegister}>
+                Get started
               </Button>
-              <Button asChild size="lg" variant="secondary">
-                <Link to="/login">Sign in</Link>
+              <Button size="lg" variant="secondary" onClick={openLogin}>
+                Sign in
               </Button>
             </>
           )}

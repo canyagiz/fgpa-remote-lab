@@ -1,9 +1,11 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "../context/AuthContext";
+import { useAuthDialog } from "../context/AuthDialogContext";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { openLogin, openRegister } = useAuthDialog();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -43,11 +45,15 @@ export default function Navbar() {
           </>
         ) : (
           <>
-            <Link to="/login" className="font-medium text-muted-foreground hover:text-foreground">
+            <button
+              type="button"
+              onClick={openLogin}
+              className="font-medium text-muted-foreground hover:text-foreground"
+            >
               Sign in
-            </Link>
-            <Button asChild size="sm">
-              <Link to="/register">Register</Link>
+            </button>
+            <Button size="sm" onClick={openRegister}>
+              Register
             </Button>
           </>
         )}

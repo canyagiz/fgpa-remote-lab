@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* ============================================================
    Design tokens (shadcn/ui convention: raw values in :root, then

@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import AuthDialog from "./components/AuthDialog";
 import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
@@ -47,6 +48,7 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
       </Routes>
+      <AuthDialog />
     </>
   );
 }
