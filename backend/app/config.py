@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     min_reservation_advance_minutes: int = 5
     expiry_sweep_interval_seconds: int = 60
 
+    # Basic Auth credentials the CT300 hardware containers' own
+    # labdiscoverylib session API expects from whichever broker calls it.
+    # Real values come from .env (gitignored), same as smtp_password above -
+    # not hardcoded here.
+    weblab_username: str = ""
+    weblab_password: str = ""
+
     # 1 minute (the old repo's value) is too tight in practice - it barely
     # survives the time it takes to switch to a mail client and back, let
     # alone the current Mailpit lookup workflow before real SMTP is wired
