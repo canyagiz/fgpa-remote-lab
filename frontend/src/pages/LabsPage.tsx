@@ -19,10 +19,15 @@ const statusVariant: Record<LabStatus, "success" | "warning"> = {
 const pad = (n: number) => String(n).padStart(2, "0");
 
 // The date/time inputs hold the user's *local* wall-clock time. A booking
-// must start at least 5 minutes out (enforced server-side too), so default
-// to now + 5 min.
+// must start at least 5 minutes out (enforced server-side too). Default to
+// now + 6 min, not +5: the input only holds whole minutes, so truncating
+// "now" (which has seconds) down to HH:MM already loses up to 59s of the
+// margin - by the time the form is actually submitted, +5 min from the
+// truncated value can land a few seconds under the server's 5-minute
+// floor, forcing the user to bump the time by hand. +6 min keeps at least
+// ~60s of slack after truncation.
 function defaultReservationDateTime() {
-  const t = new Date(Date.now() + 5 * 60 * 1000);
+  const t = new Date(Date.now() + 6 * 60 * 1000);
   return {
     date: `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`,
     time: `${pad(t.getHours())}:${pad(t.getMinutes())}`,
