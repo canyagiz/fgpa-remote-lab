@@ -58,11 +58,14 @@ also serves the built frontend - see "Serving the frontend" below.
 SQLite (the `.env.example` default) is only for quick local testing. CT210
 runs **Postgres** - set `DATABASE_URL` to
 `postgresql+psycopg2://<user>:<password>@localhost:5432/<dbname>` and make
-sure `psycopg2-binary` is installed (already in `requirements.txt`). No
-migration tool (Alembic) is wired up yet - `Base.metadata.create_all()` in
-`app/main.py`'s lifespan handler creates tables on startup, which is fine
-while the schema is still moving but should be replaced with real migrations
-before this holds production data.
+sure `psycopg2-binary` is installed (already in `requirements.txt`).
+
+The schema is owned by **Alembic** (`alembic/`), not by the app - startup no
+longer creates tables. Build or update the schema with `alembic upgrade
+head`; after changing a model, generate a migration with `alembic revision
+--autogenerate -m "..."`. See [`../deploy/README.md`](../deploy/README.md)
+for the full workflow. Tests are isolated onto a throwaway sqlite file (see
+`tests/conftest.py`) and never touch this database.
 
 ## Running tests
 
@@ -134,5 +137,3 @@ whenever that request never arrives (closed tab, dropped connection).
 ## Deliberately deferred (see project migration plan)
 
 - German translation
-- Alembic migrations (schema changes are still applied by hand via `ALTER
-  TABLE` - see `[[project_ct210_migration_plan]]`)

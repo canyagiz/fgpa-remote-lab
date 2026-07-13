@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import FileResponse
 
 from app.config import settings
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal
 from app.models import Lab
 from app.routers import auth, hardware_proxy, labs, profile, reservations, stats, users
 from app.services.queue import sweep_expired_reservations, sweep_logged_out_sessions
@@ -90,7 +90,13 @@ def _seed_labs():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    # The schema is owned by Alembic now (see backend/alembic/), not created
+    # here on startup - a production deploy runs `alembic upgrade head`
+    # before the service starts, so the app must not silently create tables
+    # that a pending migration was supposed to define. Seeding the lab
+    # catalog is still fine: it's data, not schema, and no-ops if the labs
+    # table is already populated. Tests build their own schema directly (see
+    # tests/conftest.py) instead of going through Alembic.
     _seed_labs()
     sweep_task = asyncio.create_task(_expiry_sweep_loop())
     yield

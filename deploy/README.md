@@ -34,6 +34,39 @@ pct exec 210 -- systemctl daemon-reload
 pct exec 210 -- systemctl restart fgpa-remote-lab
 ```
 
+## Database schema (Alembic migrations)
+
+The schema is owned by Alembic (`backend/alembic/`), not by the app - the
+startup code no longer creates tables. The database URL is read from the
+app's own settings (`.env`), so run these from `/opt/fgpa-remote-lab/backend`
+with the venv active.
+
+```bash
+# First-time / rebuilt server: create the whole schema from scratch.
+cd /opt/fgpa-remote-lab/backend && source .venv/bin/activate
+alembic upgrade head
+systemctl restart fgpa-remote-lab   # lifespan then seeds the 4 labs
+
+# After changing a model (new column/table): generate + apply a migration.
+alembic revision --autogenerate -m "describe the change"
+#   ^ review the generated file in alembic/versions/ before applying
+alembic upgrade head
+
+# Sanity checks:
+alembic current   # which revision the live DB is at
+alembic check     # fails if models and the live DB have drifted
+```
+
+**Never** apply schema changes with hand-written `ALTER TABLE` any more -
+that was the old workflow and it left no record. Every change is a
+committed migration file now.
+
+> Tests do **not** use this database. `backend/tests/conftest.py` forces an
+> isolated throwaway sqlite file (with a hard assertion that refuses to run
+> against anything else), so `pytest` can never touch the production
+> Postgres - a lesson learned the hard way when the un-isolated suite was
+> wiping it on every run.
+
 ## Why nginx instead of proxying in the app itself
 
 Earlier versions of this backend reverse-proxied hardware-lab traffic
