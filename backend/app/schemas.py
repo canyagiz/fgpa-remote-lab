@@ -1,6 +1,7 @@
+import re
 from datetime import date, datetime, time
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models import LabStatus, ReservationStatus, UserRole
 
@@ -23,6 +24,24 @@ class RegisterRequest(BaseModel):
     csrf_token: str
     # Hidden honeypot field: real users never fill this in.
     website: str = ""
+
+    @field_validator("password")
+    @classmethod
+    def password_must_be_reasonably_complex(cls, password: str) -> str:
+        # Length alone (the only rule until now) let straight-digit or
+        # single-case passwords like "password" or "12345678" through.
+        # Requiring upper+lower+digit is a middle ground: real complexity
+        # without going as far as mandating a symbol, which tends to push
+        # people toward predictable substitutions instead of actual
+        # strength (see PasswordStrength.tsx, which still shows a symbol
+        # as an optional "Excellent" bonus, not a requirement).
+        if not re.search(r"[A-Z]", password):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", password):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"[0-9]", password):
+            raise ValueError("Password must contain at least one number")
+        return password
 
 
 class LoginRequest(BaseModel):
@@ -64,7 +83,10 @@ class ProfileUpdate(BaseModel):
     full_name: str | None = Field(default=None, max_length=100)
     school: str | None = Field(default=None, max_length=150)
     department: str | None = Field(default=None, max_length=150)
-    age: int | None = Field(default=None, ge=0, le=150)
+    # ge=0 previously let through obviously-wrong values (e.g. 4). 14/120
+    # is a generous real-world bound for a university lab's user base, not
+    # a strict age-verification gate.
+    age: int | None = Field(default=None, ge=14, le=120)
     bio: str | None = Field(default=None, max_length=1000)
     social_links: dict[str, str] | None = None
 

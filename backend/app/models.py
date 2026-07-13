@@ -1,7 +1,7 @@
 import enum
 from datetime import date, datetime, time
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, String, Text, Time, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,8 +33,12 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-    email: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    # Not unique=True/index=True here - uniqueness is enforced case-
+    # insensitively instead (see __table_args__ below), so "Alice" and
+    # "alice" can't register as two different accounts. A plain unique
+    # column constraint would only catch an exact-case duplicate.
+    username: Mapped[str] = mapped_column(String(50))
+    email: Mapped[str] = mapped_column(String(100))
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.user)
     two_factor_enabled: Mapped[bool] = mapped_column(default=True)
@@ -42,6 +46,11 @@ class User(Base):
 
     reservations: Mapped[list["Reservation"]] = relationship(back_populates="user")
     profile: Mapped["UserProfile | None"] = relationship(back_populates="user", uselist=False)
+
+    __table_args__ = (
+        Index("ix_users_username_lower", func.lower(username), unique=True),
+        Index("ix_users_email_lower", func.lower(email), unique=True),
+    )
 
 
 class UserProfile(Base):

@@ -53,6 +53,17 @@ def test_profile_requires_authentication(client):
     assert response.status_code == 401
 
 
+def test_profile_rejects_an_unreasonable_age(client):
+    register(client, "user1", "user1@example.com")
+    login(client, "user1")
+
+    response = client.put("/api/profile", json={"age": 4})
+    assert response.status_code == 422
+
+    response = client.put("/api/profile", json={"age": 200})
+    assert response.status_code == 422
+
+
 def test_profile_is_private_per_user(client):
     register(client, "user1", "user1@example.com")
     login(client, "user1")

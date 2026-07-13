@@ -10,7 +10,7 @@ def test_register_rejects_wrong_captcha(client):
         json={
             "username": "alice",
             "email": "alice@example.com",
-            "password": "password123",
+            "password": "Password123",
             "captcha_answer": -999999,
             "csrf_token": csrf,
             "website": "",
@@ -26,7 +26,7 @@ def test_register_honeypot_reports_fake_success_without_creating_user(client):
         json={
             "username": "bot",
             "email": "bot@example.com",
-            "password": "password123",
+            "password": "Password123",
             "captcha_answer": 0,
             "csrf_token": csrf,
             "website": "https://spam.example",
@@ -48,7 +48,7 @@ def test_register_honeypot_reports_fake_success_without_creating_user(client):
 def test_login_requires_2fa_and_session_gates_me(client):
     register(client, "alice", "alice@example.com")
 
-    response = client.post("/api/auth/login", json={"username": "alice", "password": "password123"})
+    response = client.post("/api/auth/login", json={"username": "alice", "password": "Password123"})
     assert response.status_code == 200
     assert response.json()["require_2fa"] is True
 
@@ -66,12 +66,12 @@ def test_2fa_only_required_on_first_login(client):
     """
     register(client, "alice", "alice@example.com")
 
-    first = client.post("/api/auth/login", json={"username": "alice", "password": "password123"})
+    first = client.post("/api/auth/login", json={"username": "alice", "password": "Password123"})
     assert first.json()["require_2fa"] is True
     login(client, "alice")  # completes the one required verification
 
     client.cookies.clear()
-    second = client.post("/api/auth/login", json={"username": "alice", "password": "password123"})
+    second = client.post("/api/auth/login", json={"username": "alice", "password": "Password123"})
     assert second.status_code == 200
     assert second.json()["require_2fa"] is False
     # No verify-2fa call needed this time - the session is already live.
@@ -95,6 +95,97 @@ def test_2fa_verification_uses_session_not_client_supplied_user_id(client):
 
     response = client.post("/api/auth/verify-2fa", json={"code": "123456"})
     assert response.status_code == 400
+
+
+def test_registration_username_is_case_insensitively_unique(client):
+    register(client, "alice", "alice@example.com")
+
+    csrf = client.get("/api/auth/csrf-token").json()["token"]
+    question = client.get("/api/auth/captcha").json()["question"]
+    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
+    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "username": "Alice",
+            "email": "someone-else@example.com",
+            "password": "Password123",
+            "captcha_answer": answer,
+            "csrf_token": csrf,
+            "website": "",
+        },
+    )
+    assert response.status_code == 409
+
+
+def test_registration_email_is_case_insensitively_unique(client):
+    register(client, "alice", "alice@example.com")
+
+    csrf = client.get("/api/auth/csrf-token").json()["token"]
+    question = client.get("/api/auth/captcha").json()["question"]
+    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
+    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "username": "someone_else",
+            "email": "Alice@Example.com",
+            "password": "Password123",
+            "captcha_answer": answer,
+            "csrf_token": csrf,
+            "website": "",
+        },
+    )
+    assert response.status_code == 409
+
+
+def test_login_username_is_case_insensitive(client):
+    register(client, "alice", "alice@example.com")
+
+    response = client.post("/api/auth/login", json={"username": "ALICE", "password": "Password123"})
+    assert response.status_code == 200
+
+
+def test_registration_rejects_a_password_without_uppercase(client):
+    csrf = client.get("/api/auth/csrf-token").json()["token"]
+    question = client.get("/api/auth/captcha").json()["question"]
+    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
+    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "username": "bob",
+            "email": "bob@example.com",
+            "password": "password123",
+            "captcha_answer": answer,
+            "csrf_token": csrf,
+            "website": "",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_registration_rejects_a_password_without_a_digit(client):
+    csrf = client.get("/api/auth/csrf-token").json()["token"]
+    question = client.get("/api/auth/captcha").json()["question"]
+    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
+    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "username": "bob",
+            "email": "bob@example.com",
+            "password": "PasswordOnly",
+            "captcha_answer": answer,
+            "csrf_token": csrf,
+            "website": "",
+        },
+    )
+    assert response.status_code == 422
 
 
 def test_create_lab_requires_admin_role_enforced_server_side(client):

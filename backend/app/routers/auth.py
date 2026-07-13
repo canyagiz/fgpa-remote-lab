@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -76,8 +77,14 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         )
     db.add(RegistrationAttempt(ip_address=ip_address))
 
+    # Case-insensitive on both sides: "Canyagiz" and "canyagiz" (or two
+    # differently-cased emails) must collide as the same account, not
+    # register as two - a plain == comparison let that duplicate through.
     existing = db.scalar(
-        select(User).where((User.username == payload.username) | (User.email == payload.email))
+        select(User).where(
+            (func.lower(User.username) == payload.username.lower())
+            | (func.lower(User.email) == payload.email.lower())
+        )
     )
     if existing:
         db.commit()
@@ -89,14 +96,25 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         password_hash=hash_password(payload.password),
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two requests for the same (or same-but-differently-cased)
+        # username/email racing past the check above - the check above is
+        # best-effort, this is the actual guarantee (DB-level unique index
+        # on lower(username)/lower(email), see the matching migration).
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username or email already exists")
 
     return MessageOut(success=True, message="Registration successful")
 
 
 @router.post("/login", response_model=LoginResult)
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.username == payload.username))
+    # Case-insensitive to match the (also case-insensitive) uniqueness
+    # check at registration - otherwise a user who typed "Canyagiz" once
+    # and "canyagiz" another time would be looking for two different rows.
+    user = db.scalar(select(User).where(func.lower(User.username) == payload.username.lower()))
 
     # Deliberately no plaintext fallback here: the old repo accepted
     # `password === stored_value` as a bypass, which was a real backdoor.
