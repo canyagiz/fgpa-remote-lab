@@ -40,7 +40,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showError, showSuccess }}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 top-16 z-50 flex flex-col items-center gap-2 px-4">
+      {/* z-[60], not z-50: the Sign in/Register dialog's overlay is also
+          z-50 and Radix appends its portal to the end of <body> once
+          opened - at equal z-index the later DOM node wins, so toasts
+          (rendered earlier, near the app root) ended up stacked *under*
+          the dialog's blurred backdrop instead of above it. */}
+      <div className="pointer-events-none fixed inset-x-0 top-16 z-[60] flex flex-col items-center gap-2 px-4">
         {toasts.map((t) => (
           <div
             key={t.id}
