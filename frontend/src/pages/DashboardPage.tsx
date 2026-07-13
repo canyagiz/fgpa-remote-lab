@@ -267,13 +267,13 @@ export default function DashboardPage() {
                           {formatCountdown(remainingMs)} remaining
                         </span>
                       )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
                       {graceMs !== null && graceMs > 0 && (
-                        <span className="text-sm font-semibold text-warning-muted-foreground">
+                        <span className="text-sm font-bold text-destructive">
                           {Math.ceil(graceMs / 1000)}s to Access
                         </span>
                       )}
-                    </div>
-                    <div className="flex shrink-0 gap-2">
                       {r.status === "pending" && (
                         <Button
                           size="sm"
