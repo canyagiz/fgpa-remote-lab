@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import httpx
@@ -117,16 +118,29 @@ def sweep_logged_out_sessions(db: Session) -> int:
         )
     ).all()
 
-    closed_count = 0
-    now = datetime.utcnow()
-    for reservation in active_with_session:
+    if not active_with_session:
+        return 0
+
+    def _check(reservation: Reservation) -> tuple[Reservation, bool]:
         try:
-            finished = is_weblab_session_finished(reservation.lab, reservation.weblab_session_url)
+            return reservation, is_weblab_session_finished(reservation.lab, reservation.weblab_session_url)
         except httpx.HTTPError:
             # Hardware unreachable or mid-restart right now - leave the
             # reservation as is and try again on the next sweep.
-            continue
+            return reservation, False
 
+    # Checked concurrently, not one after another: each is an up-to-10s
+    # HTTP call (see is_weblab_session_finished), and this whole function
+    # already runs off the event loop via asyncio.to_thread (see
+    # main.py::_expiry_sweep_loop) - but a sequential loop here would still
+    # let one slow/unreachable board delay every other board's check by up
+    # to 10s each, compounding with every open session.
+    with ThreadPoolExecutor(max_workers=len(active_with_session)) as pool:
+        results = list(pool.map(_check, active_with_session))
+
+    closed_count = 0
+    now = datetime.utcnow()
+    for reservation, finished in results:
         if finished:
             reservation.status = ReservationStatus.completed
             reservation.usage_end_time = now

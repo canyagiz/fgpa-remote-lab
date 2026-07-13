@@ -22,13 +22,21 @@ async def _expiry_sweep_loop():
         await asyncio.sleep(settings.expiry_sweep_interval_seconds)
         db = SessionLocal()
         try:
-            count = sweep_expired_reservations(db)
+            # Both sweeps are plain (synchronous) functions that can make
+            # real HTTP calls to CT300 (sweep_logged_out_sessions always;
+            # sweep_expired_reservations when closing an overrun session).
+            # Calling them directly here - a coroutine - would block this
+            # single-threaded event loop for however long CT300 takes to
+            # respond (up to its 10s timeout, confirmed by measuring it
+            # directly against an unreachable address), freezing every
+            # other request the app is serving and delaying the next sweep
+            # tick by the same amount. asyncio.to_thread runs them on a
+            # worker thread instead, so a slow/unreachable board only
+            # delays this loop's own next iteration, not the whole app.
+            count = await asyncio.to_thread(sweep_expired_reservations, db)
             if count:
                 logger.info("Expiry sweep: %d reservation(s) expired", count)
-            # A blocking HTTP call per open session - fine at this scale
-            # (a handful of boards), same tradeoff the DB-only sweep above
-            # already makes by running synchronously in this loop.
-            sweep_logged_out_sessions(db)
+            await asyncio.to_thread(sweep_logged_out_sessions, db)
         finally:
             db.close()
 
