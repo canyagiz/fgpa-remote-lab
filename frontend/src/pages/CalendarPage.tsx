@@ -4,10 +4,8 @@ import * as api from "../api/client";
 import { CalendarEntry, Lab } from "../api/types";
 import { useToast } from "../context/ToastContext";
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
 export default function CalendarPage() {
-  const { showError, showSuccess } = useToast();
+  const { showError } = useToast();
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [labs, setLabs] = useState<Lab[]>([]);
 
@@ -26,21 +24,6 @@ export default function CalendarPage() {
     const interval = setInterval(refresh, 15000);
     return () => clearInterval(interval);
   }, []);
-
-  async function reserveSlot(labId: number, labName: string, start: Date) {
-    const label = start.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-    if (!window.confirm(`Reserve ${labName} at ${label}?`)) return;
-    try {
-      // The backend works in UTC; convert the picked local time.
-      const date = `${start.getUTCFullYear()}-${pad(start.getUTCMonth() + 1)}-${pad(start.getUTCDate())}`;
-      const time = `${pad(start.getUTCHours())}:${pad(start.getUTCMinutes())}`;
-      await api.makeReservation(labId, date, time);
-      showSuccess(`Reserved ${labName} at ${label}.`);
-      await refresh();
-    } catch (err) {
-      showError(err instanceof api.ApiError ? err.message : "Failed to reserve");
-    }
-  }
 
   // Only boards you can actually book/use get a calendar; each shows its
   // full day even with zero reservations.
@@ -61,7 +44,6 @@ export default function CalendarPage() {
               labName={lab.name}
               labImageUrl={lab.image_url}
               entries={entries.filter((e) => e.lab_id === lab.id)}
-              onReserveSlot={(start) => reserveSlot(lab.id, lab.name, start)}
             />
           ))}
         </div>

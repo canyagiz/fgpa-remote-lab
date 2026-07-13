@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarEntry } from "../api/types";
 
 // A full local day, 00:00-24:00, drawn as a vertical scrollable strip in
-// 5-minute resolution. 2px/min => 5 min = 10px, 1h = 120px, 24h = 2880px.
-const PX_PER_MIN = 2;
+// 5-minute resolution. 4px/min => 1h = 240px, so the fixed-height viewport
+// below shows ~2h at a time (more legible hour labels, more scrolling -
+// an explicit tradeoff) instead of ~4h.
+const PX_PER_MIN = 4;
 const DAY_MIN = 24 * 60;
 const VIEWPORT_PX = 480;
 const MAX_DAY_OFFSET = 6;
@@ -29,10 +31,9 @@ interface CalendarDayProps {
   labName: string;
   labImageUrl: string | null;
   entries: CalendarEntry[];
-  onReserveSlot: (start: Date) => void;
 }
 
-export default function CalendarDay({ labName, labImageUrl, entries, onReserveSlot }: CalendarDayProps) {
+export default function CalendarDay({ labName, labImageUrl, entries }: CalendarDayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [dayOffset, setDayOffset] = useState(0);
@@ -77,15 +78,6 @@ export default function CalendarDay({ labName, labImageUrl, entries, onReserveSl
     }
   }
 
-  function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
-    // Ignore clicks that bubbled up from a pin.
-    if ((e.target as HTMLElement).closest("[data-pin]")) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - rect.top + e.currentTarget.scrollTop;
-    const mins = Math.floor(y / PX_PER_MIN / 5) * 5;
-    onReserveSlot(new Date(day0.getTime() + mins * 60000));
-  }
-
   return (
     <Card>
       <CardHeader>
@@ -126,19 +118,13 @@ export default function CalendarDay({ labName, labImageUrl, entries, onReserveSl
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-2 text-xs text-muted-foreground">
-          Tap an empty slot to reserve it &middot; tap a pin to see who booked it.
-        </p>
+        <p className="mb-2 text-xs text-muted-foreground">Tap a pin to see who booked it.</p>
         <div
           ref={scrollRef}
           className="relative overflow-y-auto rounded-md border border-border bg-card"
           style={{ height: VIEWPORT_PX }}
         >
-          <div
-            className="relative cursor-pointer"
-            style={{ height: DAY_MIN * PX_PER_MIN }}
-            onClick={handleGridClick}
-          >
+          <div className="relative" style={{ height: DAY_MIN * PX_PER_MIN }}>
             {/* 5-minute gridlines - faint, except :15/:30/:45 which are
                 heavier so an empty hour still reads as a ruled surface
                 rather than a blank gap. */}
