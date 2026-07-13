@@ -5,6 +5,7 @@ import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { AuthDialogProvider } from "./context/AuthDialogContext";
 import { ToastProvider } from "./context/ToastContext";
+import "@fontsource-variable/inter";
 import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
