@@ -61,19 +61,29 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect security check")
 
     ip_address = request.client.host if request.client else "unknown"
-    window_start = datetime.utcnow() - timedelta(
-        minutes=settings.registration_rate_limit_window_minutes
-    )
-    recent_attempts = db.scalar(
-        select(func.count())
-        .select_from(RegistrationAttempt)
+    now = datetime.utcnow()
+    window_start = now - timedelta(minutes=settings.registration_rate_limit_window_minutes)
+    recent_attempt_times = db.scalars(
+        select(RegistrationAttempt.attempt_time)
         .where(RegistrationAttempt.ip_address == ip_address)
         .where(RegistrationAttempt.attempt_time > window_start)
-    )
-    if recent_attempts and recent_attempts >= settings.registration_rate_limit_max_attempts:
+        .order_by(RegistrationAttempt.attempt_time)
+    ).all()
+    if len(recent_attempt_times) >= settings.registration_rate_limit_max_attempts:
+        # The window clears from its oldest end, not all at once - once the
+        # earliest of these attempts ages past the window, the count drops
+        # below the limit again and a retry succeeds.
+        retry_at = recent_attempt_times[0] + timedelta(minutes=settings.registration_rate_limit_window_minutes)
+        wait_seconds = max(int((retry_at - now).total_seconds()), 1)
+        wait_minutes = wait_seconds // 60
+        if wait_minutes >= 1:
+            wait_text = f"{wait_minutes} minute{'s' if wait_minutes != 1 else ''}"
+        else:
+            wait_text = f"{wait_seconds} second{'s' if wait_seconds != 1 else ''}"
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many attempts. Please wait before trying again.",
+            detail=f"Too many attempts. Please try again in {wait_text}.",
+            headers={"Retry-After": str(wait_seconds)},
         )
     db.add(RegistrationAttempt(ip_address=ip_address))
 

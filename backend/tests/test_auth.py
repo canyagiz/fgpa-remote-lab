@@ -97,6 +97,33 @@ def test_2fa_verification_uses_session_not_client_supplied_user_id(client):
     assert response.status_code == 400
 
 
+def test_registration_rate_limit_reports_how_long_to_wait(client):
+    from app.config import settings
+
+    for i in range(settings.registration_rate_limit_max_attempts):
+        register(client, f"ratelimit{i}", f"ratelimit{i}@example.com")
+
+    csrf = client.get("/api/auth/csrf-token").json()["token"]
+    question = client.get("/api/auth/captcha").json()["question"]
+    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
+    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "username": "onemore",
+            "email": "onemore@example.com",
+            "password": "Password123",
+            "captcha_answer": answer,
+            "csrf_token": csrf,
+            "website": "",
+        },
+    )
+    assert response.status_code == 429
+    assert "minute" in response.json()["detail"] or "second" in response.json()["detail"]
+    assert int(response.headers["Retry-After"]) > 0
+
+
 def test_registration_username_is_case_insensitively_unique(client):
     register(client, "alice", "alice@example.com")
 
