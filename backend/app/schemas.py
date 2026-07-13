@@ -3,7 +3,7 @@ from datetime import date, datetime, time
 from urllib.parse import urlparse
 
 import email_validator
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
 from app.models import LabStatus, ReservationStatus, UserRole
@@ -20,49 +20,61 @@ class CaptchaOut(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
-    email: EmailStr
-    password: str = Field(min_length=8)
+    # Deliberately untyped/unconstrained here (plain str, no EmailStr, no
+    # Field length limits, no complexity validators) - FastAPI validates
+    # the request body against this model *before* the route function
+    # body runs, so anything checked here (or via a pydantic
+    # field_validator) never counts toward the registration rate limit,
+    # which lives inside routers/auth.py::register(). A bad email or a
+    # weak password used to skip the limit entirely; a wrong captcha
+    # answer still does (see the comment in register() for why that one
+    # is a separate, deliberate exception). Real validation - email
+    # format/deliverability, password complexity, username length - now
+    # happens in register() itself, after the rate-limit gate, via
+    # validate_registration_email/validate_registration_password below.
+    username: str
+    email: str
+    password: str
     captcha_answer: int
     csrf_token: str
     # Hidden honeypot field: real users never fill this in.
     website: str = ""
 
-    @field_validator("email")
-    @classmethod
-    def email_domain_must_accept_mail(cls, email: str) -> str:
-        # EmailStr above only checks syntax. This is a real DNS MX lookup -
-        # confirmed live that it rejects a domain with no mail exchanger
-        # (e.g. "gmail.co", a plausible typo of gmail.com) while accepting
-        # real ones, closing the gap a syntax-only check leaves: a 2FA
-        # code can never arrive at an address that can't receive mail, so
-        # letting registration succeed anyway just produces an account
-        # that can never be verified.
-        if not settings.verify_email_deliverability:
-            return email
-        try:
-            email_validator.validate_email(email, check_deliverability=True)
-        except email_validator.EmailNotValidError as err:
-            raise ValueError(f"This email address can't receive mail: {err}")
-        return email
 
-    @field_validator("password")
-    @classmethod
-    def password_must_be_reasonably_complex(cls, password: str) -> str:
-        # Length alone (the only rule until now) let straight-digit or
-        # single-case passwords like "password" or "12345678" through.
-        # Requiring upper+lower+digit is a middle ground: real complexity
-        # without going as far as mandating a symbol, which tends to push
-        # people toward predictable substitutions instead of actual
-        # strength (see PasswordStrength.tsx, which still shows a symbol
-        # as an optional "Excellent" bonus, not a requirement).
-        if not re.search(r"[A-Z]", password):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not re.search(r"[a-z]", password):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not re.search(r"[0-9]", password):
-            raise ValueError("Password must contain at least one number")
-        return password
+def validate_registration_username(username: str) -> None:
+    if len(username) < 3 or len(username) > 50:
+        raise ValueError("Username must be between 3 and 50 characters")
+
+
+def validate_registration_email(email: str) -> None:
+    # A real DNS MX lookup, not just syntax - confirmed live that it
+    # rejects a domain with no mail exchanger (e.g. "gmail.co", a
+    # plausible typo of gmail.com) while accepting real ones. A 2FA code
+    # can never arrive at an address that can't receive mail, so letting
+    # registration succeed anyway just produces an account that can
+    # never be verified.
+    try:
+        email_validator.validate_email(email, check_deliverability=settings.verify_email_deliverability)
+    except email_validator.EmailNotValidError as err:
+        raise ValueError(f"This email address can't receive mail: {err}")
+
+
+def validate_registration_password(password: str) -> None:
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    # Length alone (the only rule until now) let straight-digit or
+    # single-case passwords like "password" or "12345678" through.
+    # Requiring upper+lower+digit is a middle ground: real complexity
+    # without going as far as mandating a symbol, which tends to push
+    # people toward predictable substitutions instead of actual
+    # strength (see PasswordStrength.tsx, which still shows a symbol
+    # as an optional "Excellent" bonus, not a requirement).
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", password):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"[0-9]", password):
+        raise ValueError("Password must contain at least one number")
 
 
 class LoginRequest(BaseModel):

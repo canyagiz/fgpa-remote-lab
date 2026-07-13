@@ -19,6 +19,9 @@ from app.schemas import (
     RegisterRequest,
     UserOut,
     Verify2FARequest,
+    validate_registration_email,
+    validate_registration_password,
+    validate_registration_username,
 )
 from app.security import generate_two_factor_code, hash_password, mask_email, verify_password
 from app.services.email import send_two_factor_code
@@ -49,17 +52,19 @@ def get_csrf_token(request: Request):
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     # Honeypot: bots fill every field, including this hidden one. Report
     # fake success so the bot doesn't learn its submission was rejected.
+    # Not rate-limited - it's a guaranteed instant fake success, nothing
+    # here for an attacker to probe or brute-force.
     if payload.website:
         return MessageOut(success=True, message="Registration successful")
 
-    if not payload.csrf_token or payload.csrf_token != request.session.get("csrf_token"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid security token")
-    request.session.pop("csrf_token", None)
-
-    stored_captcha = request.session.pop("captcha_result", None)
-    if stored_captcha is None or payload.captcha_answer != stored_captcha:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect security check")
-
+    # Rate-limited from here on, BEFORE csrf/captcha/content validation -
+    # all of those used to run first, so a submission that merely had a
+    # bad email, a weak password, or a wrong captcha answer never
+    # consumed a slot at all. RegisterRequest itself is deliberately
+    # unvalidated (plain str fields, see schemas.py) specifically so that
+    # any pydantic-level rejection can't happen before this point either -
+    # otherwise FastAPI would 422 the request before this function body
+    # (and this check) ever ran.
     ip_address = request.client.host if request.client else "unknown"
     now = datetime.utcnow()
     window_start = now - timedelta(minutes=settings.registration_rate_limit_window_minutes)
@@ -85,7 +90,26 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
             detail=f"Too many attempts. Please try again in {wait_text}.",
             headers={"Retry-After": str(wait_seconds)},
         )
+    # Committed immediately, decoupled from whatever happens next - a bad
+    # csrf token, wrong captcha, or failed content validation below must
+    # still burn this slot, not roll back with the rest of the request.
     db.add(RegistrationAttempt(ip_address=ip_address))
+    db.commit()
+
+    if not payload.csrf_token or payload.csrf_token != request.session.get("csrf_token"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid security token")
+    request.session.pop("csrf_token", None)
+
+    stored_captcha = request.session.pop("captcha_result", None)
+    if stored_captcha is None or payload.captcha_answer != stored_captcha:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect security check")
+
+    try:
+        validate_registration_username(payload.username)
+        validate_registration_email(payload.email)
+        validate_registration_password(payload.password)
+    except ValueError as err:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(err))
 
     # Case-insensitive on both sides: "Canyagiz" and "canyagiz" (or two
     # differently-cased emails) must collide as the same account, not
@@ -97,7 +121,8 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         )
     )
     if existing:
-        db.commit()
+        # Nothing to commit here - the RegistrationAttempt above was
+        # already committed on its own, and this was only a read.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username or email already exists")
 
     user = User(
