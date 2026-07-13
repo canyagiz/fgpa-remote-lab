@@ -82,6 +82,10 @@ _REAL_LABS = [
         keywords=["fpga", "electronics", "image processing", "xilinx", "zynq"],
         features=["feature1", "feature2"],
         is_public=True,
+        # Self-hosted copy of the prerequisites page (mirrored, not linked
+        # to the external test domain it originally came from) - see
+        # frontend/public/guides/arty-prerequest.html.
+        guide_url="/guides/arty-prerequest.html",
     ),
 ]
 

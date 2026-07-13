@@ -38,6 +38,7 @@ export interface Lab {
   features: string[] | null;
   is_public: boolean;
   next_available_at: string | null;
+  guide_url: string | null;
 }
 
 export interface LabAccess {

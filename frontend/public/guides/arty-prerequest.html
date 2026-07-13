@@ -1,0 +1,3097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FPGA Vision Lab — Prerequisites (Arty Z7 / MNIST CNN)</title>
+<style>
+:root {
+    --primary:       #2563eb;
+    --primary-dark:  #1d4ed8;
+    --success:       #16a34a;
+    --danger:        #dc2626;
+    --amber:         #f59e0b;
+    --gray-50:       #f8fafc;
+    --gray-100:      #f1f5f9;
+    --gray-200:      #e2e8f0;
+    --gray-300:      #cbd5e1;
+    --gray-400:      #94a3b8;
+    --gray-500:      #64748b;
+    --gray-700:      #334155;
+    --gray-900:      #0f172a;
+    --shadow-sm:     0 1px 3px rgba(0,0,0,.08);
+    --shadow-md:     0 4px 12px rgba(0,0,0,.10);
+    --shadow-lg:     0 8px 24px rgba(0,0,0,.12);
+    --radius:        14px;
+    --radius-sm:     8px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+    background: var(--gray-100);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0; color: var(--gray-900);
+}
+a { color: var(--primary); }
+
+/* Header */
+.lab-header {
+    background: linear-gradient(135deg, #0f2744 0%, #1e4db7 100%);
+    color: #fff; padding: 14px 0; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    position: sticky; top: 0; z-index: 50;
+}
+.lab-header .inner {
+    max-width: 1180px; margin: 0 auto; padding: 0 20px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.lab-header h1 { font-size: 18px; font-weight: 700; margin: 0; letter-spacing: -.3px; }
+.lab-header h1 span { font-weight: 400; opacity: .8; font-size: 14px; margin-left: 8px; }
+.header-nav { display: flex; gap: 14px; flex-wrap: wrap; }
+.header-nav a {
+    color: #fff; opacity: .82; text-decoration: none; font-size: 13px; font-weight: 600;
+    padding: 5px 10px; border-radius: var(--radius-sm); transition: background .15s, opacity .15s;
+}
+.header-nav a:hover { opacity: 1; background: rgba(255,255,255,.12); }
+
+/* Layout */
+main { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; }
+section { margin-bottom: 46px; }
+section h2 {
+    font-size: 22px; font-weight: 800; margin: 0 0 6px; color: var(--gray-900);
+    display: flex; align-items: center; gap: 10px;
+}
+section h2 .step-badge {
+    background: var(--primary); color: #fff; font-size: 12px; font-weight: 700;
+    width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+section .lead { color: var(--gray-500); font-size: 14.5px; margin: 0 0 18px; max-width: 780px; line-height: 1.55; }
+.card {
+    background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-md);
+    border: 1px solid var(--gray-200); padding: 22px;
+}
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
+
+.hero {
+    background: linear-gradient(135deg, #0f2744 0%, #1e4db7 100%);
+    color: #fff; border-radius: var(--radius); padding: 36px 32px; box-shadow: var(--shadow-lg);
+    margin-bottom: 34px;
+}
+.hero h1 { font-size: 28px; margin: 0 0 10px; }
+.hero p { font-size: 15px; opacity: .9; max-width: 760px; line-height: 1.6; margin: 0; }
+.hero .tags { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+.hero .tag { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; }
+
+/* Compare boxes (training vs inference) */
+.compare-box { border-radius: var(--radius-sm); padding: 18px; }
+.compare-box.train { background: #fff7ed; border: 1px solid #fed7aa; }
+.compare-box.infer { background: #eff6ff; border: 1px solid #bfdbfe; }
+.compare-box h3 { margin: 0 0 8px; font-size: 15px; }
+.compare-box.train h3 { color: #c2410c; }
+.compare-box.infer h3 { color: #1d4ed8; }
+.compare-box ul { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.7; color: var(--gray-700); }
+
+/* MNIST sample strip */
+.mnist-strip { display: flex; gap: 10px; flex-wrap: wrap; }
+.mnist-strip .sample { text-align: center; }
+.mnist-strip img {
+    width: 64px; height: 64px; object-fit: contain; background: #000;
+    border-radius: var(--radius-sm); border: 2px solid var(--gray-200); image-rendering: pixelated;
+}
+.mnist-strip .lbl { font-size: 11px; color: var(--gray-500); margin-top: 4px; }
+
+/* CNN 3D viewer */
+/* Animation (canvas + toolbar) on the left, math panel on the right, side by
+   side — so playing the animation and reading the live numbers don't require
+   looking at two different places on the page one after another. */
+.cnn-viewer {
+    display: grid; grid-template-columns: 1fr 190px; gap: 0;
+    border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200); background: #0b1220;
+}
+@media (max-width: 900px) { .cnn-viewer { grid-template-columns: 1fr; } }
+#cnn-canvas-wrap { position: relative; height: 480px; background: radial-gradient(circle at 50% 30%, #2d4f92 0%, #17223d 75%); }
+#cnn-canvas-wrap canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#cnn-canvas-wrap canvas:active { cursor: grabbing; }
+#cnn-info-panel {
+    background: #0f172a; color: #e2e8f0; padding: 14px; font-size: 12px; line-height: 1.5;
+    display: flex; flex-direction: column; gap: 8px; border-left: 1px solid rgba(255,255,255,.08);
+}
+#cnn-info-panel h4 { margin: 0; font-size: 15px; color: #fff; }
+#cnn-info-panel .shape-pill {
+    display: inline-block; background: rgba(37,99,235,.25); color: #93c5fd; border: 1px solid rgba(37,99,235,.4);
+    border-radius: 6px; padding: 3px 9px; font-family: 'Courier New', monospace; font-size: 12px; width: fit-content;
+}
+#cnn-info-panel p { margin: 0; color: #94a3b8; }
+#cnn-info-panel .hint-default { color: #64748b; font-style: italic; }
+.cnn-toolbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: #fff; border: 1px solid var(--gray-200); border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius); padding: 10px 18px; flex-wrap: wrap;
+}
+.btn-flow {
+    background: linear-gradient(135deg, var(--success) 0%, #15803d 100%); color: #fff; border: none;
+    border-radius: var(--radius-sm); padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(22,163,74,.3); transition: opacity .15s, transform .1s;
+}
+.btn-flow:hover { opacity: .92; transform: translateY(-1px); }
+.btn-flow:active { transform: translateY(0); }
+.flow-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn-flow-secondary {
+    background: var(--gray-100); border: 1px solid var(--gray-300); color: var(--gray-700);
+    border-radius: var(--radius-sm); width: 34px; height: 34px; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: background .15s;
+}
+.btn-flow-secondary:hover { background: var(--gray-200); }
+.btn-flow-secondary:disabled { opacity: .4; cursor: not-allowed; }
+.speed-control { display: flex; align-items: center; gap: 8px; margin-left: 4px; }
+.speed-control label { font-size: 11.5px; color: var(--gray-500); font-weight: 600; white-space: nowrap; }
+.speed-control label span { color: var(--primary); font-weight: 700; }
+.speed-control input[type="range"] {
+    width: 130px; accent-color: var(--primary); cursor: pointer;
+}
+.gear-toggle {
+    background: var(--gray-100); border: 1px solid var(--gray-300); color: #16a34a;
+    border-radius: var(--radius-sm); padding: 6px 12px; font-size: 11.5px; font-weight: 700;
+    cursor: pointer; white-space: nowrap; transition: background .15s, color .15s;
+}
+.gear-toggle:hover { opacity: .9; }
+.gear-toggle.active { background: #dc2626; color: #fff; border-color: #dc2626; }
+.nav-hint { font-size: 12px; color: var(--gray-500); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--gray-500); }
+.legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+/* Math detail panel — real numbers behind whichever step is animating.
+   Grows to fit its content (no internal scrolling) so every value is
+   visible at once. */
+.math-panel {
+    margin-top: 14px; background: #0f172a; border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); color: #e2e8f0;
+    display: flex; flex-direction: column;
+}
+.math-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px 4px;
+}
+.math-panel-header h3 { margin: 0; font-size: 14px; font-weight: 700; color: #fff; }
+.math-auto-badge { font-size: 11px; color: #4ade80; font-weight: 600; }
+.math-auto-badge.manual { color: #94a3b8; }
+.math-tabs {
+    display: flex; gap: 6px; padding: 10px 18px; flex-wrap: wrap;
+}
+.math-tab {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); color: #94a3b8;
+    border-radius: 20px; padding: 7px 16px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    transition: background .15s, color .15s;
+}
+.math-tab:hover { background: rgba(255,255,255,.12); color: #fff; }
+.math-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.math-content { padding: 18px; min-height: 170px; }
+.math-flow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.math-op-symbol { font-size: 22px; font-weight: 700; color: #64748b; }
+.math-mini-grid { display: grid; gap: 3px; }
+.math-cell {
+    width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace; font-size: 10.5px; font-weight: 700; border-radius: 4px;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: #e2e8f0;
+}
+.math-cell.dim { opacity: .4; }
+.math-cell.highlight { background: rgba(250,204,21,.35); border-color: #facc15; color: #fff7d6; }
+.math-label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+.math-col { display: flex; flex-direction: column; align-items: center; }
+.math-result {
+    font-family: 'Courier New', monospace; font-size: 22px; font-weight: 800; color: #facc15;
+    background: rgba(250,204,21,.1); border: 1px solid rgba(250,204,21,.3); border-radius: 8px;
+    padding: 8px 16px;
+}
+.math-note { font-size: 12.5px; color: #94a3b8; margin-top: 12px; line-height: 1.6; }
+.math-terms { font-family: 'Courier New', monospace; font-size: 12px; color: #cbd5e1; line-height: 1.9; }
+.math-terms .term-strong { color: #facc15; font-weight: 700; }
+.fc-param-summary {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;
+}
+.fc-param-chip {
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 8px;
+    padding: 8px 14px; font-size: 11.5px; color: #94a3b8; line-height: 1.5; flex: 1; min-width: 150px;
+}
+.fc-param-chip b { display: block; font-family: 'Courier New', monospace; font-size: 15px; color: #e2e8f0; font-weight: 700; }
+.fc-param-chip.total { border-color: rgba(250,204,21,.4); background: rgba(250,204,21,.08); }
+.fc-param-chip.total b { color: #facc15; }
+.fc-param-diagram {
+    font-size: 12px; color: #94a3b8; line-height: 1.7; margin: 0 0 16px;
+    background: rgba(255,255,255,.03); border-radius: 8px; padding: 10px 14px;
+}
+.fc-param-diagram b { color: #cbd5e1; }
+.math-formula {
+    font-family: 'Courier New', monospace; font-size: 12.5px; color: #cbd5e1;
+    background: rgba(255,255,255,.04); border-radius: 6px; padding: 8px 12px; margin: 8px 0 14px;
+}
+.math-flow-sub { font-size: 10px; color: #64748b; margin-top: 4px; text-align: center; }
+.fc-formula-strip {
+    font-family: 'Courier New', monospace; font-size: 11.5px; color: #94a3b8; line-height: 2;
+    margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,.1);
+}
+.fc-formula-strip .chip { display: inline-block; padding: 1px 7px; border-radius: 4px; font-weight: 700; color: #0f172a; }
+.math-score-list { display: flex; flex-direction: column; gap: 4px; font-family: 'Courier New', monospace; font-size: 12.5px; }
+.math-score-row { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border-radius: 5px; }
+.math-score-row.winner { background: rgba(250,204,21,.18); color: #facc15; font-weight: 700; }
+.math-score-bar { height: 6px; border-radius: 3px; background: #475569; }
+.math-score-row.winner .math-score-bar { background: #facc15; }
+.math-visual-row { margin-top: 14px; padding-top: 14px; border-top: 1px dashed rgba(255,255,255,.12); }
+.math-swatch-grid { display: grid; gap: 3px; }
+.math-swatch { width: 34px; height: 34px; border-radius: 4px; border: 1px solid rgba(255,255,255,.15); }
+.math-swatch.highlight { box-shadow: 0 0 0 2px #facc15; }
+.math-swatch-result { width: 56px; height: 56px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25); }
+.math-channel-list { display: flex; flex-wrap: wrap; gap: 6px; font-family: 'Courier New', monospace; font-size: 11.5px; color: #cbd5e1; margin-top: 8px; }
+.math-channel-chip { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 5px; padding: 4px 8px; display: flex; align-items: center; gap: 6px; }
+.math-channel-chip .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.math-relu-graph { background: rgba(255,255,255,.03); border-radius: 8px; }
+.math-channel-block { padding: 14px 0; border-bottom: 1px dashed rgba(255,255,255,.1); }
+.math-channel-block:last-of-type { border-bottom: none; }
+.math-channel-block > .math-label { font-size: 12px; color: #93c5fd; margin-bottom: 10px; }
+.math-combine-final { margin-top: 16px; padding-top: 16px; border-top: 2px solid rgba(250,204,21,.25); }
+.math-scale { margin-top: 8px; width: 100%; }
+.math-scale-bar { height: 9px; border-radius: 5px; border: 1px solid rgba(255,255,255,.15); }
+.math-scale-labels { display: flex; justify-content: space-between; font-family: 'Courier New', monospace; font-size: 9.5px; color: #94a3b8; margin-top: 3px; }
+
+/* "What was constructed during training" — every learnable slot (Conv1/Conv2
+   kernels+biases, FC1/FC2 weights) rendered in its own small 3D view, same
+   orbit/zoom/pan interaction as the main architecture viewer above. */
+.training-phase {
+    margin-top: 14px; background: #0f172a; border-radius: var(--radius);
+    box-shadow: var(--shadow-lg); color: #e2e8f0; padding: 18px 20px;
+}
+.training-phase h3 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #fff; }
+.training-phase-note { font-size: 12.5px; color: #94a3b8; line-height: 1.6; margin: 0 0 14px; max-width: 900px; }
+#training-canvas-wrap {
+    position: relative; height: 420px; border-radius: var(--radius-sm); overflow: hidden;
+    background: radial-gradient(circle at 50% 30%, #2d4f92 0%, #17223d 75%);
+}
+#training-canvas-wrap canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#training-canvas-wrap canvas:active { cursor: grabbing; }
+.training-phase .nav-hint { display: block; margin-top: 10px; }
+
+/* Tables */
+table.spec { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.spec th, table.spec td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--gray-200); }
+table.spec th { color: var(--gray-500); font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; font-weight: 700; }
+table.spec tr:last-child td { border-bottom: none; }
+code.inline { background: var(--gray-100); border: 1px solid var(--gray-200); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
+
+/* IO diagram */
+.io-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; }
+.io-chip { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 12px 14px; }
+.io-chip .name { font-family: 'Courier New', monospace; font-weight: 700; font-size: 13px; color: var(--primary-dark); }
+.io-chip .role { font-size: 12px; color: var(--gray-500); margin-top: 4px; }
+
+footer { text-align: center; padding: 30px 20px 50px; color: var(--gray-400); font-size: 12.5px; }
+footer a { color: var(--primary); font-weight: 600; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header class="lab-header">
+    <div class="inner">
+        <h1>FPGA Vision Remote Lab <span>— Arty Z7 · Prerequisites</span></h1>
+        <nav class="header-nav">
+            <a href="#lut">LUTs</a>
+            <a href="#train-infer">Training vs. Inference</a>
+            <a href="#mnist">MNIST</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#weights">Weights</a>
+            <a href="#quantization">Quantization</a>
+            <a href="#io">Buttons / LEDs</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+
+    <div class="hero">
+        <h1>Before you reserve the Arty Z7 lab, read this</h1>
+        <p>
+            This lab runs a real, trained neural network entirely inside FPGA fabric — no CPU
+            involved in the computation. You don't need any prior AI background to do it, but
+            a few core ideas will make the rest of the lab click immediately. This page walks
+            through them, including an interactive 3D model of the exact CNN architecture you
+            will implement in Verilog.
+        </p>
+        <div class="tags">
+            <span class="tag">Zynq-7000 XC7Z020</span>
+            <span class="tag">FPGA fabric only — no ARM cores</span>
+            <span class="tag">MNIST digit classification</span>
+            <span class="tag">Vivado + Verilog</span>
+        </div>
+    </div>
+
+    <section id="lut">
+        <h2><span class="step-badge">1</span>What a LUT actually is</h2>
+        <p class="lead">Everything the FPGA does — including this entire neural network — ultimately runs on these tiny memory blocks.</p>
+        <div class="card">
+            <p style="margin:0 0 10px">
+                A <b>LUT (Look-Up Table)</b> is a tiny block of SRAM. Its inputs act as an address; the
+                output is whatever bit is stored at that address. A 6-input LUT stores a
+                64-bit truth table, so <i>any</i> function of up to 6 variables can be implemented just
+                by writing the right bits into it — this is most of what "programming" an FPGA means.
+            </p>
+            <p style="margin:0">
+                The Arty Z7 has <b>53,200</b> of these LUTs, all operating in parallel. That parallelism —
+                not a faster clock — is why an FPGA can run CNN inference so efficiently. BRAM and DSP48
+                blocks (used later for weight storage and multiply-accumulate) are separate dedicated
+                blocks, not built out of LUTs.
+            </p>
+        </div>
+    </section>
+
+    <section id="train-infer">
+        <h2><span class="step-badge">2</span>Training vs. Inference</h2>
+        <p class="lead">The board you'll program never learns anything — that already happened, on a PC, before the lab existed.</p>
+        <div class="two-col">
+            <div class="compare-box train">
+                <h3>Training — happens once, in software</h3>
+                <ul>
+                    <li>Forward pass <b>and</b> backward pass</li>
+                    <li>Weights updated over many epochs</li>
+                    <li>Runs on a developer's PC (TensorFlow/PyTorch)</li>
+                    <li>Produces one fixed set of weight values</li>
+                </ul>
+            </div>
+            <div class="compare-box infer">
+                <h3>Inference — what runs on your FPGA</h3>
+                <ul>
+                    <li>Forward pass <b>only</b></li>
+                    <li>Weights are fixed, loaded once into BRAM</li>
+                    <li>One image in → one predicted digit out</li>
+                    <li>Exactly the arithmetic FPGA hardware is good at</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="mnist">
+        <h2><span class="step-badge">3</span>The MNIST dataset</h2>
+        <p class="lead">28×28 grayscale handwritten digits, 0–9 — the same images your input navigator in the lab will step through.</p>
+        <div class="card">
+            <div class="mnist-strip" id="mnistStrip">
+                <!-- filled by JS with real sample images already served by this lab -->
+            </div>
+            <p style="margin:14px 0 0; color:var(--gray-500); font-size:13px;">
+                Each image is a single-channel 28×28 pixel grid (784 values, 0–255). It's the standard
+                benchmark for a first CNN because it's small enough to run comfortably in FPGA fabric,
+                yet realistic enough that getting 98%+ accuracy is a genuine result.
+            </p>
+        </div>
+    </section>
+
+    <section id="architecture">
+        <h2><span class="step-badge">4</span>CNN Architecture — explore it in 3D</h2>
+        <p class="lead">
+            This is the exact, fixed pipeline every student implements in Verilog: same layer count, same
+            filter counts, same kernel sizes for everyone. What differs between designs is only <i>how</i>
+            each student computes it (parallel vs. serial, pipeline depth, bit-widths) — not <i>what</i>
+            it computes.
+        </p>
+        <div class="cnn-viewer">
+            <div id="cnn-canvas-wrap">
+                <canvas id="cnn-canvas"></canvas>
+            </div>
+            <div id="cnn-info-panel">
+                <h4 id="panelTitle">Select a layer</h4>
+                <span class="shape-pill" id="panelShape">—</span>
+                <p id="panelDesc" class="hint-default">Click any layer in the 3D view for details, or press Play Data Flow to watch how one image moves through the whole pipeline.</p>
+            </div>
+        </div>
+        <div class="cnn-toolbar">
+            <div class="flow-controls">
+                <button class="btn-flow" id="playFlowBtn">▶ Play Data Flow</button>
+                <button class="btn-flow-secondary" id="pauseFlowBtn" title="Pause / Resume" disabled>⏸</button>
+                <button class="btn-flow-secondary" id="restartFlowBtn" title="Restart" disabled>↻</button>
+                <div class="speed-control">
+                    <label for="speedSlider">Speed <span id="speedValueLabel">1x</span></label>
+                    <input type="range" id="speedSlider" min="-2" max="6" step="0.05" value="0" title="Drag to slow down or speed up the animation">
+                    <button class="gear-toggle active" id="autoGearBtn" title="When on, speed resets to 1x every time a new operation (Conv, ReLU, Pooling, Flatten, Fully Connected, ArgMax) starts — speed up again anytime, it just won't carry over automatically">⚙ Auto Gear</button>
+                </div>
+            </div>
+            <span class="nav-hint">Drag to rotate · Scroll to zoom · Right-drag to pan · Double-click a layer to inspect it — Conv layers explode into their individual feature maps</span>
+            <div class="legend">
+                <span><span class="dot" style="background:#94a3b8"></span>Input 28×28×1</span>
+                <span><span class="dot" style="background:#2563eb"></span>Conv1 13×13×8</span>
+                <span><span class="dot" style="background:#16a34a"></span>Conv2 5×5×16</span>
+                <span><span class="dot" style="background:#f59e0b"></span>FC1 400→128</span>
+                <span><span class="dot" style="background:#dc2626"></span>FC2 128→10</span>
+            </div>
+        </div>
+
+        <div class="math-panel">
+            <div class="math-panel-header">
+                <h3>The real numbers behind this step</h3>
+                <span class="math-auto-badge" id="mathAutoBadge">● following animation</span>
+            </div>
+            <div class="math-tabs" id="mathTabs">
+                <button class="math-tab" data-op="conv">Conv</button>
+                <button class="math-tab" data-op="relu">ReLU</button>
+                <button class="math-tab" data-op="pool">Pooling</button>
+                <button class="math-tab" data-op="flatten">Flatten</button>
+                <button class="math-tab" data-op="fc">Fully Connected</button>
+                <button class="math-tab" data-op="argmax">ArgMax</button>
+            </div>
+            <div class="math-content" id="mathContent"></div>
+        </div>
+
+        <div class="training-phase">
+            <h3>What was constructed during the AI training phase</h3>
+            <p class="training-phase-note">
+                Training never touches the architecture above — same layer count, same filter counts, same kernel
+                sizes, always. All training does is search for better numbers to put into these exact slots. Below
+                are every one of Conv1's 8 kernels and Conv2's 16 kernels, in their own 3D view — the same
+                (illustrative, untrained) numbers already driving the animation above, colored exactly the same way,
+                so both views teach the same thing.
+            </p>
+            <div id="training-canvas-wrap">
+                <canvas id="training-canvas"></canvas>
+            </div>
+            <span class="nav-hint">Drag to rotate · Scroll to zoom · Right-drag to pan · Double-click a Conv2 filter to explode its 8 channels</span>
+        </div>
+    </section>
+
+    <section id="weights">
+        <h2><span class="step-badge">5</span>One weight file, many student designs</h2>
+        <p class="lead">The provided <code class="inline">.coe</code> file contains only numbers — never an architecture.</p>
+        <div class="two-col">
+            <div class="card">
+                <h3 style="margin-top:0;font-size:14px;color:var(--gray-700)">Fixed for everyone</h3>
+                <ul style="font-size:13.5px;line-height:1.8;color:var(--gray-700);margin:0;padding-left:18px">
+                    <li>Layer count and order</li>
+                    <li>Filter counts and kernel sizes</li>
+                    <li>The actual weight values</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0;font-size:14px;color:var(--gray-700)">Yours to design</h3>
+                <ul style="font-size:13.5px;line-height:1.8;color:var(--gray-700);margin:0;padding-left:18px">
+                    <li>Parallel vs. serial multiply-accumulate</li>
+                    <li>Pipeline depth</li>
+                    <li>Internal fixed-point bit-widths</li>
+                    <li>BRAM access patterns</li>
+                </ul>
+            </div>
+        </div>
+        <p style="font-size:13px;color:var(--gray-500);margin-top:14px">
+            Because the architecture is fixed, two completely different hardware designs can load the
+            same <code class="inline">.coe</code> file and both produce the correct classification —
+            just at different speeds and resource costs. The provided testbench checks only
+            input/output correctness, never internal structure.
+        </p>
+    </section>
+
+    <section id="quantization">
+        <h2><span class="step-badge">6</span>What "weight quantization" means (Lab 2 preview)</h2>
+        <p class="lead">Same trained network, same architecture — only the number format representing each weight changes.</p>
+        <div class="card">
+            <p style="margin:0 0 12px">
+                <code class="inline">scale = 127 / max(abs(weights))</code> &nbsp;→&nbsp;
+                <code class="inline">int8_value = round(weight × scale)</code>
+            </p>
+            <table class="spec">
+                <thead><tr><th>Format</th><th>Bits/weight</th><th>Typical effect</th></tr></thead>
+                <tbody>
+                    <tr><td>FP32</td><td>32</td><td>Reference accuracy, most expensive in FPGA fabric</td></tr>
+                    <tr><td>INT8</td><td>8</td><td>~4× less BRAM, DSP48-friendly, usually small accuracy cost</td></tr>
+                    <tr><td>INT4</td><td>4</td><td>Further resource savings, accuracy starts to drop</td></tr>
+                    <tr><td>INT2</td><td>2</td><td>Cheapest, but accuracy can degrade substantially</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section id="io">
+        <h2><span class="step-badge">7</span>Physical buttons &amp; LEDs</h2>
+        <p class="lead">Beyond the HDMI display, the design exposes real hardware I/O, routed through the Raspberry Pi's GPIO into the Arty Z7's PMOD headers.</p>
+        <div class="io-grid">
+            <div class="io-chip"><div class="name">BTN0 · T11</div><div class="role">Physical reset (rst)</div></div>
+            <div class="io-chip"><div class="name">BTN1 · T10</div><div class="role">Start / trigger inference</div></div>
+            <div class="io-chip"><div class="name">LD0–LD3</div><div class="role">Predicted digit, binary (0–9)</div></div>
+            <div class="io-chip"><div class="name">LD4–LD5</div><div class="role">Free — optional status bits</div></div>
+        </div>
+    </section>
+
+</main>
+
+<footer>
+    Ready? <a href="/labs">Head back to the lab catalogue</a> to reserve your Arty Z7 session.
+</footer>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+<script type="module">
+import * as THREE from "three";
+// Vendored locally (not the unpkg CDN copy) with one line patched: upstream's
+// zoom-scale math truncates a fractional devicePixelRatio to 0 via `| 0`,
+// which divides by zero and collapses every zoom step to the target instantly
+// instead of moving gradually. See static/js/OrbitControlsPatched.js.
+import { OrbitControls } from "/guides/js/OrbitControlsPatched.js";
+
+/* ---------- MNIST sample strip (reuses real images already served by this lab) ---------- */
+const strip = document.getElementById("mnistStrip");
+for (let i = 0; i < 10; i++) {
+    const wrap = document.createElement("div");
+    wrap.className = "sample";
+    const img = document.createElement("img");
+    img.src = `/labfiles/images/images_MNIST/digit_${i}.png`;
+    img.alt = `MNIST digit ${i}`;
+    img.onerror = () => { wrap.style.display = "none"; };
+    const lbl = document.createElement("div");
+    lbl.className = "lbl";
+    lbl.textContent = i;
+    wrap.appendChild(img);
+    wrap.appendChild(lbl);
+    strip.appendChild(wrap);
+}
+
+/* ---------- CNN 3D architecture viewer ---------- */
+const wrap3d = document.getElementById("cnn-canvas-wrap");
+const canvas = document.getElementById("cnn-canvas");
+
+const scene = new THREE.Scene();
+scene.background = null;
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+camera.position.set(18, 14, 34);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 8;
+controls.maxDistance = 110;
+controls.zoomSpeed = 3.0;
+// Without this, OrbitControls always dollies straight along the
+// camera→target line — i.e. every scroll tick pulls the view toward the
+// scene's fixed orbit target (the architecture's center), no matter where
+// the mouse actually is. That reads as "zoom always snaps toward the
+// center" instead of a natural, cursor-anchored zoom. zoomToCursor (three
+// r155+) re-anchors each dolly step on the mouse position instead.
+controls.zoomToCursor = true;
+
+// Trackpad "pinch to zoom" arrives in Chrome/Opera as a wheel event with
+// ctrlKey set, which the browser can also treat as a page-zoom gesture
+// unless it's explicitly prevented here.
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); }, { passive: false });
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(20, 30, 20);
+scene.add(dirLight);
+const rimLight = new THREE.DirectionalLight(0x7ea2ff, 0.55);
+rimLight.position.set(-20, -10, -20);
+scene.add(rimLight);
+
+/* Layer definitions — spacing along X mirrors the pipeline order. The gaps
+   INTO Conv1(raw) and INTO Conv2(raw) are wider than the internal gaps
+   within a conv block, so the two "Layer N" group boxes have breathing
+   room and never touch. LAYER_GAPS[i] is the gap between layer i and i+1. */
+const LAYER_GAPS = [13, 9, 9, 13, 9, 9, 10, 9, 9, 9];
+const LAYER_X = [0];
+for (let i = 0; i < LAYER_GAPS.length; i++) LAYER_X.push(LAYER_X[i] + LAYER_GAPS[i]);
+// Conv, ReLU and Pool are real, separate layers here (matching the three
+// separate Verilog modules students write) — not one fused "feature map
+// appears" step. The lab document's own architecture table still only lists
+// "Conv1 + ReLU + Pool" as the layer name, because that's the pooled output;
+// layers 1-2 and 4-5 below are the intermediate stages that produce it.
+const layerDefs = [
+    { name: "Input", shape: "28 × 28 × 1", color: 0x94a3b8,
+      desc: "Raw grayscale pixel values, 0–255, one image at a time. This is the only thing that changes between runs — the weights below stay fixed.",
+      type: "input", w: 28, h: 28, d: 1 },
+    { name: "Conv1 (raw)", titleText: "Output values of Conv1", opLabel: "Conv1", shape: "26 × 26 × 8", color: 0x2563eb,
+      desc: "8 filters of 3×3 slide stride-1 across the input. Each position is a raw multiply-accumulate sum plus that filter's own bias — before any activation function, so it can be negative (shown in red) or positive.",
+      type: "stack", w: 26, h: 26, d: 8, gridCols: 4, cellSize: 0.22, cellGap: 0.025, sheetGap: 0.5, signed: true },
+    { name: "ReLU1", titleText: "Output values of ReLU1", opLabel: "ReLU1", shape: "26 × 26 × 8", color: 0x2563eb,
+      desc: "Same 26×26×8 shape as the raw conv output — ReLU is purely position-by-position: negative sums clamp to zero, positive ones pass through unchanged.",
+      type: "stack", w: 26, h: 26, d: 8, gridCols: 4, cellSize: 0.22, cellGap: 0.025, sheetGap: 0.5 },
+    { name: "Conv1 + ReLU + Pool", titleText: "Output of Max Pooling", opLabel: "Max Pooling", shape: "13 × 13 × 8", color: 0x2563eb,
+      desc: "2×2 max-pooling over the ReLU output halves the resolution to 13×13×8 — same unit-cube size as ReLU1 above, so the shrink is a real size difference, not just a relabeling. The 8 cards below are those 8 independent feature maps, matching the lab document's architecture table.",
+      type: "stack", w: 13, h: 13, d: 8, gridCols: 4, cellSize: 0.22, cellGap: 0.025, sheetGap: 0.5 },
+    { name: "Conv2 (raw)", titleText: "Output values of Conv2", opLabel: "Conv2", shape: "11 × 11 × 16", color: 0x16a34a,
+      desc: "16 filters of 3×3 slide stride-1 across all 8 incoming feature maps at once. All 8 channels are multiplied and summed, then this filter's own single bias is added once — one bias per filter, not per channel. Again, this is the raw pre-activation sum — can be negative or positive.",
+      type: "stack", w: 11, h: 11, d: 16, gridCols: 4, cellSize: 0.22, cellGap: 0.025, sheetGap: 0.4, signed: true },
+    { name: "ReLU2", titleText: "Output values of ReLU2", opLabel: "ReLU2", shape: "11 × 11 × 16", color: 0x16a34a,
+      desc: "Same 11×11×16 shape as Conv2's raw output — negative sums clamp to zero, positive ones are unchanged.",
+      type: "stack", w: 11, h: 11, d: 16, gridCols: 4, cellSize: 0.22, cellGap: 0.025, sheetGap: 0.4 },
+    { name: "Conv2 + ReLU + Pool", titleText: "Output of Max Pooling", opLabel: "Max Pooling", shape: "5 × 5 × 16", color: 0x16a34a,
+      desc: "2×2 max-pooling over ReLU2 halves the resolution again, to 5×5×16 — same unit-cube size as ReLU2, so this card is visibly smaller. The 16 small cards below are those 16 independent feature maps.",
+      type: "stack", w: 5, h: 5, d: 16, gridCols: 4, cellSize: 0.22, cellGap: 0.025, sheetGap: 0.4 },
+    { name: "Flatten", titleText: "Output values of Flatten", opLabel: "Flatten", shape: "5×5×16 → 400", color: 0xf59e0b,
+      desc: "The 5×5×16 pooled values are unrolled into one flat vector of 400 numbers — channel by channel (filter 1's 25 values, then filter 2's, ...), in the exact order the FPGA reads BRAM. Each row here is exactly one filter's 25 values.",
+      type: "dense", n: 400, cols: 25 },
+    { name: "FC1 + ReLU", titleText: "Output values of Fully Connected Layer", opLabel: "Fully Connected Layer's Connections", shape: "400 → 128", color: 0xf59e0b,
+      desc: "Every one of the 400 flattened values connects to all 128 neurons here — this is the densest, most parameter-heavy layer. The gray lines are those connections; brighter ones are illustrative stronger weights.",
+      type: "dense", n: 128 },
+    { name: "FC2", titleText: "Output values of FC2", opLabel: "FC2's Connections", shape: "128 → 10", color: 0xdc2626,
+      desc: "The 128 FC1 neurons connect densely to 10 output scores, one per digit — same fully-connected idea as FC1, just far fewer neurons on the output side.",
+      type: "output", n: 10 },
+    { name: "ArgMax", titleText: "Prediction", opLabel: "ArgMax", shape: "10 → 1 digit", color: 0xdc2626,
+      desc: "ArgMax does no math on the weights at all — it just scans the 10 FC2 scores and reports the index of the largest one. That index is the network's predicted digit.",
+      type: "argmax" },
+];
+
+const layerGroups = [];
+const layerCenters = [];
+const stackAnimState = {}; // layerIndex -> { progress, target, filterCount, items }
+const layerCubeGrid = {};        // layerIndex -> [filterIdx][yy][xx] -> cube mesh
+const layerDenseNodes = {};      // layerIndex -> [flatIndex] -> node mesh (Flatten / FC1)
+const layerFilterBaseColor = {}; // layerIndex -> [filterIdx] -> THREE.Color
+
+/* ---------- Illustrative (not trained) convolution math, used only to give
+   the "Play Data Flow" kernel animation real, per-pixel-driven values to
+   reveal instead of a flat placeholder color. ---------- */
+function mulberry32(seed) {
+    return function () {
+        seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+function makeKernel(rng, channels) {
+    const k = new Float32Array(9 * channels);
+    for (let i = 0; i < k.length; i++) k[i] = rng() * 2 - 1;
+    return k;
+}
+// Conv, ReLU and Pool are kept as three separate, explicit steps (matching
+// the architecture's own layer names) instead of one fused computation, so
+// the kernel-scan animation can show each one distinctly.
+function convValid3x3(getSrc, srcW, srcH, srcC, kernel, bias) {
+    const outW = srcW - 2, outH = srcH - 2; // kernel 3x3, stride 1, padding 0
+    const data = new Float32Array(outW * outH); // raw, pre-activation — can be negative
+    for (let oy = 0; oy < outH; oy++) {
+        for (let ox = 0; ox < outW; ox++) {
+            // One bias per FILTER (output feature map), added once after every
+            // input channel has been multiplied and summed — not one bias per
+            // channel. Real conv layers work the same way.
+            let sum = bias;
+            for (let ky = 0; ky < 3; ky++) {
+                for (let kx = 0; kx < 3; kx++) {
+                    for (let c = 0; c < srcC; c++) {
+                        sum += kernel[(ky * 3 + kx) * srcC + c] * getSrc(ox + kx, oy + ky, c);
+                    }
+                }
+            }
+            data[oy * outW + ox] = sum;
+        }
+    }
+    return { w: outW, h: outH, data };
+}
+function relu(map) {
+    const data = new Float32Array(map.data.length);
+    for (let i = 0; i < data.length; i++) data[i] = Math.max(0, map.data[i]);
+    return { w: map.w, h: map.h, data };
+}
+function normalize01(map) {
+    let max = 1e-6;
+    for (let i = 0; i < map.data.length; i++) max = Math.max(max, map.data[i]);
+    for (let i = 0; i < map.data.length; i++) map.data[i] /= max;
+    return map;
+}
+function maxAbs(map) {
+    let m = 1e-6;
+    for (let i = 0; i < map.data.length; i++) m = Math.max(m, Math.abs(map.data[i]));
+    return m;
+}
+function maxPool2(map) {
+    const outW = Math.floor(map.w / 2), outH = Math.floor(map.h / 2);
+    const data = new Float32Array(outW * outH);
+    for (let oy = 0; oy < outH; oy++) {
+        for (let ox = 0; ox < outW; ox++) {
+            const a = map.data[(oy * 2) * map.w + ox * 2];
+            const b = map.data[(oy * 2) * map.w + ox * 2 + 1];
+            const c = map.data[(oy * 2 + 1) * map.w + ox * 2];
+            const d = map.data[(oy * 2 + 1) * map.w + ox * 2 + 1];
+            data[oy * outW + ox] = Math.max(a, b, c, d);
+        }
+    }
+    return { w: outW, h: outH, data };
+}
+
+function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function addLabelSprite(text, color, opts = {}) {
+    const canvasW = opts.canvasW || 512;
+    const canvasH = opts.canvasH || 128;
+    const maxFontPx = opts.maxFontPx || 52;
+    const cnv = document.createElement("canvas");
+    cnv.width = canvasW; cnv.height = canvasH;
+    const ctx = cnv.getContext("2d");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    // Shrink the font until the text fits the canvas width — otherwise long
+    // labels like "Conv1 + ReLU + Pool" get clipped at the edges.
+    let fontPx = maxFontPx;
+    const maxTextWidth = canvasW - 32;
+    do {
+        ctx.font = `bold ${fontPx}px -apple-system, sans-serif`;
+        fontPx -= 2;
+    } while (ctx.measureText(text).width > maxTextWidth && fontPx > 10);
+    ctx.fillStyle = color;
+    ctx.fillText(text, canvasW / 2, canvasH / 2);
+    const tex = new THREE.CanvasTexture(cnv);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    const aspect = canvasH / canvasW;
+    sprite.scale.set(4.2, 4.2 * aspect, 1);
+    sprite.userData.canvas = cnv;
+    sprite.userData.ctx = ctx;
+    return sprite;
+}
+
+// Redraws a label sprite created by addLabelSprite with new text — used by
+// ArgMax to fill in the actual predicted digit once it's computed.
+function updateSpriteText(sprite, text, color, maxFontPx = 160) {
+    const cnv = sprite.userData.canvas, ctx = sprite.userData.ctx;
+    ctx.clearRect(0, 0, cnv.width, cnv.height);
+    let fontPx = maxFontPx;
+    const maxTextWidth = cnv.width - 32;
+    do {
+        ctx.font = `bold ${fontPx}px -apple-system, sans-serif`;
+        fontPx -= 2;
+    } while (ctx.measureText(text).width > maxTextWidth && fontPx > 10);
+    ctx.fillStyle = color;
+    ctx.fillText(text, cnv.width / 2, cnv.height / 2);
+    sprite.material.map.needsUpdate = true;
+}
+
+// A large, thin wireframe box enclosing several consecutive layers, with its
+// own label — visually groups e.g. "Conv1 (raw) + ReLU1 + Output of Max
+// Pooling" as internal steps of one single computational layer, matching how
+// the lab document itself only ever names that whole group "Conv1 + ReLU + Pool".
+// Live-updating (not built once and left static): re-measured every frame so
+// that exploding any of the grouped layers into separate filter cards grows
+// the box with them, instead of leaving cards poking out of a stale box.
+const groupBoundingBoxes = [];
+function addGroupBoundingBox(layerIndices, label) {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.LineBasicMaterial({ color: 0xcbd5e1, transparent: true, opacity: 0.14 });
+    const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo), mat);
+    scene.add(wire);
+    const label3d = addLabelSprite(label, "#e2e8f0");
+    label3d.scale.set(6.8, 1.7, 1);
+    scene.add(label3d);
+    groupBoundingBoxes.push({ layerIndices, wire, label3d });
+}
+
+// Only the corner cubes of a stack layer's grid are needed to bound it (the
+// grid is regular, so the extremes are always at channel 0/last and
+// row 0/last, col 0/last) — sampling just those 8 is far cheaper per frame
+// than expanding over every one of the (up to 5408) cubes. Title/op-label
+// sprites are deliberately excluded — including them skewed the box
+// upward and off-center instead of hugging just the feature-map cubes.
+function expandBoxFromLayerCorners(box, layerIndex) {
+    const grid = layerCubeGrid[layerIndex];
+    if (grid) {
+        const lastCh = grid.length - 1;
+        const lastYY = grid[0].length - 1;
+        const lastXX = grid[0][0].length - 1;
+        [0, lastCh].forEach((ch) => {
+            [0, lastYY].forEach((yy) => {
+                [0, lastXX].forEach((xx) => { box.expandByObject(grid[ch][yy][xx]); });
+            });
+        });
+        return;
+    }
+    // Dense layers (Flatten / FC1) have no [ch][yy][xx] grid — sample the
+    // 4 corners of their own cols x rows sphere grid instead.
+    const nodes = layerDenseNodes[layerIndex];
+    if (!nodes || !nodes.length) return;
+    const def = layerDefs[layerIndex];
+    const cols = def.cols || 16;
+    const n = nodes.length;
+    const rows = Math.ceil(n / cols);
+    const corners = [0, cols - 1, (rows - 1) * cols, rows * cols - 1];
+    corners.forEach((idx) => { if (nodes[Math.min(idx, n - 1)]) box.expandByObject(nodes[Math.min(idx, n - 1)]); });
+}
+
+function updateGroupBoundingBoxes() {
+    const box = new THREE.Box3();
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    groupBoundingBoxes.forEach((g) => {
+        box.makeEmpty();
+        g.layerIndices.forEach((i) => expandBoxFromLayerCorners(box, i));
+        box.getSize(size);
+        box.getCenter(center);
+        size.multiplyScalar(1.1);
+        g.wire.position.copy(center);
+        g.wire.scale.set(Math.max(size.x, 0.01), Math.max(size.y, 0.01), Math.max(size.z, 0.01));
+        g.label3d.position.set(center.x, center.y + size.y / 2 + 1.1, center.z);
+    });
+}
+
+/* Build the 28x28 input from a real MNIST sample already on this server,
+   falling back to a simple procedural ring digit if it can't be loaded. */
+function buildInputHeights(cb) {
+    const size = 28;
+    const fallback = () => {
+        const h = new Float32Array(size * size);
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const dx = x - size / 2, dy = y - size / 2;
+                const r = Math.sqrt(dx * dx + dy * dy);
+                h[y * size + x] = (r > 6 && r < 10.5) ? 1 : 0;
+            }
+        }
+        cb(h);
+    };
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+        try {
+            const off = document.createElement("canvas");
+            off.width = size; off.height = size;
+            const octx = off.getContext("2d");
+            octx.drawImage(img, 0, 0, size, size);
+            const data = octx.getImageData(0, 0, size, size).data;
+            const h = new Float32Array(size * size);
+            for (let i = 0; i < size * size; i++) {
+                h[i] = data[i * 4] / 255; // red channel of grayscale image
+            }
+            cb(h);
+        } catch (e) {
+            fallback();
+        }
+    };
+    img.onerror = fallback;
+    img.src = "/labfiles/images/images_MNIST/digit_3.png";
+}
+
+function buildLayer(def, index, inputHeights) {
+    const group = new THREE.Group();
+    const x = LAYER_X[index];
+    group.position.x = x;
+
+    const cellSize = 0.34;
+    const gap = 0.04;
+
+    if (def.type === "input") {
+        // Every pixel is the same full cube, same small gap as the filter
+        // cards — only its color encodes intensity (0 = black, 255 = white),
+        // no size/depth distortion.
+        const geo = new THREE.BoxGeometry(cellSize, cellSize, cellSize);
+        layerCubeGrid[index] = [[]];
+        for (let yy = 0; yy < def.h; yy++) {
+            layerCubeGrid[index][0][yy] = [];
+            for (let xx = 0; xx < def.w; xx++) {
+                const v = inputHeights[yy * def.w + xx];
+                const mat = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(v, v, v),
+                    emissive: new THREE.Color(v * 0.25, v * 0.25, v * 0.25),
+                    roughness: 0.7,
+                });
+                const cube = new THREE.Mesh(geo, mat);
+                cube.position.set(0, (yy - def.h / 2) * (cellSize + gap), (xx - def.w / 2) * (cellSize + gap));
+                group.add(cube);
+                layerCubeGrid[index][0][yy][xx] = cube;
+            }
+        }
+    } else if (def.type === "stack") {
+        // Collapsed (default) state: all def.d filters packed into one solid
+        // slab, like a single feature block. Clicking directly on that slab
+        // smoothly "explodes" it, filter by filter, into separated cards
+        // (each with an F# label) laid out in a grid — this is what makes
+        // each of the individual kernels/filters visible and countable.
+        const baseColor = new THREE.Color(def.color);
+        const cs = def.cellSize, cg = def.cellGap;
+        const sheetW = def.w * (cs + cg) - cg;
+        const sheetH = def.h * (cs + cg) - cg;
+        const cols = def.gridCols;
+        const rows = Math.ceil(def.d / cols);
+        const stepY = sheetH + def.sheetGap;
+        const stepZ = sheetW + def.sheetGap;
+        const cellGeo = new THREE.BoxGeometry(cs * 0.92, cs * 0.92, cs * 0.92);
+        const hue = {};
+        baseColor.getHSL(hue);
+
+        const collapsedSpacing = cs * 1.02;
+        const collapsedDepth = (def.d - 1) * collapsedSpacing;
+        const animItems = [];
+        layerCubeGrid[index] = [];
+        layerFilterBaseColor[index] = [];
+
+        for (let ch = 0; ch < def.d; ch++) {
+            const col = ch % cols, row = Math.floor(ch / cols);
+            const centerY = (row - (rows - 1) / 2) * stepY;
+            const centerZ = (col - (cols - 1) / 2) * stepZ;
+            const collapsedX = ch * collapsedSpacing - collapsedDepth / 2;
+
+            const sheetColor = new THREE.Color().setHSL((hue.h + ch * 0.015) % 1, hue.s, Math.min(0.78, hue.l + ch * 0.012));
+            layerFilterBaseColor[index][ch] = sheetColor;
+            layerCubeGrid[index][ch] = [];
+
+            for (let yy = 0; yy < def.h; yy++) {
+                layerCubeGrid[index][ch][yy] = [];
+                for (let xx = 0; xx < def.w; xx++) {
+                    // Each cell gets its own material instance (not shared)
+                    // so the kernel-scan animation can tint individual pixels.
+                    const mat = new THREE.MeshStandardMaterial({ color: sheetColor, roughness: 0.45, metalness: 0.15 });
+                    const cube = new THREE.Mesh(cellGeo, mat);
+                    const expandedPos = new THREE.Vector3(
+                        0,
+                        centerY + (yy - def.h / 2) * (cs + cg),
+                        centerZ + (xx - def.w / 2) * (cs + cg)
+                    );
+                    const collapsedPos = new THREE.Vector3(
+                        collapsedX,
+                        (yy - def.h / 2) * (cs + cg),
+                        (xx - def.w / 2) * (cs + cg)
+                    );
+                    cube.position.copy(collapsedPos);
+                    group.add(cube);
+                    layerCubeGrid[index][ch][yy][xx] = cube;
+                    animItems.push({ mesh: cube, filterIndex: ch, kind: "cube", collapsed: collapsedPos, expanded: expandedPos });
+                }
+            }
+
+            const tag = addLabelSprite(`F${ch + 1}`, "#f8fafc", { canvasW: 220, canvasH: 150, maxFontPx: 100 });
+            tag.scale.set(0.7, 0.48, 1);
+            tag.material.opacity = 0;
+            tag.visible = false;
+            group.add(tag);
+            animItems.push({ mesh: tag, filterIndex: ch, kind: "label",
+                collapsed: new THREE.Vector3(collapsedX, 0, 0),
+                expanded: new THREE.Vector3(0.4, centerY + sheetH / 2 + 0.55, centerZ) });
+        }
+
+        stackAnimState[index] = { progress: 0, target: 0, filterCount: def.d, items: animItems };
+    } else if (def.type === "dense") {
+        // cols defaults to 16 (matches FC1's 128 neurons -> 8 rows); Flatten
+        // overrides it to 1 so its 400 values render as a literal column
+        // vector instead of a grid — each node gets its own material so
+        // individual neurons can be revealed one at a time.
+        const cols = def.cols || 16, rows = Math.ceil(def.n / cols);
+        // Same node size and spacing everywhere (column vector or grid) —
+        // consistency matters more here than keeping a 400-tall column short.
+        const spacing = 0.42;
+        const nodeRadius = 0.14;
+        const geo = new THREE.SphereGeometry(nodeRadius, 12, 12);
+        layerDenseNodes[index] = [];
+        for (let i = 0; i < def.n; i++) {
+            const col = i % cols, row = Math.floor(i / cols);
+            const mat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.4, metalness: 0.2 });
+            const sph = new THREE.Mesh(geo, mat);
+            sph.position.set(0, (row - rows / 2) * spacing, (col - cols / 2) * spacing);
+            group.add(sph);
+            layerDenseNodes[index][i] = sph;
+        }
+    } else if (def.type === "output") {
+        const geo = new THREE.SphereGeometry(0.32, 20, 20);
+        layerDenseNodes[index] = [];
+        for (let i = 0; i < def.n; i++) {
+            const mat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.35, metalness: 0.25 });
+            const sph = new THREE.Mesh(geo, mat);
+            sph.position.set(0, (i - def.n / 2) * 0.9, 0);
+            sph.userData.digitIndex = i;
+            group.add(sph);
+            layerDenseNodes[index][i] = sph;
+            const label = addLabelSprite(String(i), "#f8fafc");
+            label.position.set(1.4, (i - def.n / 2) * 0.9, 0);
+            group.add(label);
+        }
+    } else if (def.type === "argmax") {
+        // A single node: ArgMax doesn't compute anything from weights, it
+        // just reports which one of FC2's 10 scores was largest.
+        const geo = new THREE.SphereGeometry(0.55, 24, 24);
+        const mat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.3, metalness: 0.3 });
+        const sph = new THREE.Mesh(geo, mat);
+        group.add(sph);
+        layerDenseNodes[index] = [sph];
+        const digitLabel = addLabelSprite("?", "#f8fafc", { canvasW: 220, canvasH: 220, maxFontPx: 160 });
+        digitLabel.scale.set(1.6, 1.6, 1);
+        digitLabel.position.set(0, 1.3, 0);
+        group.add(digitLabel);
+        group.userData.argmaxSphere = sph;
+        group.userData.argmaxLabel = digitLabel;
+    }
+
+    // Main title — what this layer's cubes actually hold — sits above the
+    // cubes themselves, named after the operation's output values.
+    const title = addLabelSprite(def.titleText || def.name, "#e2e8f0");
+    const titleY = def.type === "output" ? def.n * 0.55 : (def.type === "argmax" ? 2.4 : 6.2);
+    title.position.set(0, titleY, 0);
+    title.scale.set(6.4, 1.6, 1);
+    group.add(title);
+
+    // Separate, smaller label naming the operation itself (e.g. "Conv1",
+    // "Max Pooling"), sitting where the connecting rod/arrow from the
+    // previous layer actually is — between the two layers, not above either one.
+    if (def.opLabel) {
+        const gapBefore = index > 0 ? LAYER_X[index] - LAYER_X[index - 1] : 9;
+        const opLabel = addLabelSprite(def.opLabel, "#cbd5e1", { canvasW: 320, canvasH: 110, maxFontPx: 60 });
+        opLabel.position.set(-gapBefore / 2, 0.9, 0);
+        opLabel.scale.set(3.4, 1.17, 1);
+        group.add(opLabel);
+    }
+
+    group.userData.layerIndex = index;
+    scene.add(group);
+    layerGroups.push(group);
+    layerCenters.push(new THREE.Vector3(x, 0, 0));
+}
+
+let FLOW_STAGES = [];
+let flattenValues = null;   // Float32Array(400) — channel-major, 25 per Pool2 filter
+let fc1Weights = null;      // Float32Array(400*128) — illustrative (untrained), signed
+let fc1Biases = null;       // Float32Array(128) — one bias per FC1 output neuron
+let fc1Activations = null;  // Float32Array(128) — ReLU(flatten . fc1Weights + fc1Biases), illustrative
+let fc2Weights = null;      // Float32Array(128*10) — illustrative (untrained), signed
+let fc2Biases = null;       // Float32Array(10) — one bias per FC2 output neuron
+let fc2Scores = null;       // Float32Array(10) — fc1Activations . fc2Weights + fc2Biases, illustrative
+let argmaxDigit = 0;        // index of the largest fc2Scores entry
+let inputHeightsData = null; // Float32Array(784) — the actual loaded digit's pixels
+let conv1KernelsData = null, conv2KernelsData = null; // the illustrative kernel weights, for the math panel
+let conv1BiasesData = null, conv2BiasesData = null; // one bias per filter, for the math panel
+
+buildInputHeights((heights) => {
+    layerDefs.forEach((def, i) => buildLayer(def, i, heights));
+    inputHeightsData = heights;
+
+    // Illustrative (untrained) conv math — real per-pixel numbers driving
+    // what "Play Data Flow" reveals, computed from the actual loaded digit.
+    // Conv, ReLU and Pool are kept as separate arrays (not fused) so the
+    // animation can paint three genuinely separate layers, in sequence.
+    const rng = mulberry32(42);
+    const conv1Kernels = Array.from({ length: 8 }, () => makeKernel(rng, 1));
+    // Modest range vs. the ±1 weights — visible enough to matter in the math
+    // panel without dominating the dot-product sum it's added to.
+    const conv1Biases = Array.from({ length: 8 }, () => (rng() * 2 - 1) * 0.4);
+    const conv1PreRelu = conv1Kernels.map((k, i) => convValid3x3((x, y) => heights[y * 28 + x], 28, 28, 1, k, conv1Biases[i]));
+    const conv1PostRelu = conv1PreRelu.map((r) => relu(r));
+    const conv1Pooled = conv1PostRelu.map((r) => normalize01(maxPool2(r)));
+    const conv1MaxAbs = conv1PreRelu.map((r) => maxAbs(r));
+    conv1KernelsData = conv1Kernels;
+    conv1BiasesData = conv1Biases;
+
+    const conv2Kernels = Array.from({ length: 16 }, () => makeKernel(rng, 8));
+    const conv2Biases = Array.from({ length: 16 }, () => (rng() * 2 - 1) * 0.4);
+    const conv2PreRelu = conv2Kernels.map((k, i) => convValid3x3((x, y, c) => conv1Pooled[c].data[y * 13 + x], 13, 13, 8, k, conv2Biases[i]));
+    const conv2PostRelu = conv2PreRelu.map((r) => relu(r));
+    const conv2Pooled = conv2PostRelu.map((r) => normalize01(maxPool2(r)));
+    const conv2MaxAbs = conv2PreRelu.map((r) => maxAbs(r));
+    conv2KernelsData = conv2Kernels;
+    conv2BiasesData = conv2Biases;
+
+    // Layer indices: 0 Input, 1 Conv1-raw, 2 ReLU1, 3 Conv1+ReLU+Pool,
+    // 4 Conv2-raw, 5 ReLU2, 6 Conv2+ReLU+Pool, 7 Flatten, 8 FC1, 9 FC2.
+    const conv1PooledSpacing = layerDefs[3].cellSize + layerDefs[3].cellGap;
+
+    // Flatten: one column of 25 per Pool2 filter (col = filter, row = spatial
+    // position) — matches the dense layer's own cols=16 grid exactly.
+    // Channel-major: filter 0's 25 values first, then filter 1's, etc. —
+    // matches "channel by channel, row by row within a channel" exactly,
+    // and lines up with the flatten layer's column-vector index order.
+    flattenValues = new Float32Array(400);
+    for (let filterIdx = 0; filterIdx < 16; filterIdx++) {
+        for (let spatial = 0; spatial < 25; spatial++) {
+            flattenValues[filterIdx * 25 + spatial] = conv2Pooled[filterIdx].data[spatial];
+        }
+    }
+    // Illustrative (untrained) FC1 weights, just to give the 400x128
+    // connections a real "some strong, some weak" look instead of uniform gray.
+    const fcRng = mulberry32(123);
+    fc1Weights = new Float32Array(400 * 128);
+    for (let i = 0; i < fc1Weights.length; i++) fc1Weights[i] = fcRng() * 2 - 1;
+    // One bias per OUTPUT neuron (128 total, not 400×128) — same rule as the
+    // conv layers: a bias belongs to the neuron it's added to, not to any one
+    // incoming connection, so every one of its 400 inputs shares it.
+    fc1Biases = new Float32Array(128);
+    for (let o = 0; o < 128; o++) fc1Biases[o] = (fcRng() * 2 - 1) * 0.4;
+
+    // A real (if untrained) forward pass through FC1 and FC2, so ArgMax has
+    // an actual computed winner instead of a hardcoded one.
+    fc1Activations = new Float32Array(128);
+    for (let o = 0; o < 128; o++) {
+        let sum = fc1Biases[o];
+        for (let i = 0; i < 400; i++) sum += flattenValues[i] * fc1Weights[i * 128 + o];
+        fc1Activations[o] = Math.max(0, sum); // ReLU
+    }
+    const fc2Rng = mulberry32(777);
+    fc2Weights = new Float32Array(128 * 10);
+    for (let i = 0; i < fc2Weights.length; i++) fc2Weights[i] = fc2Rng() * 2 - 1;
+    // One bias per output neuron again — 10 total, not 128×10.
+    fc2Biases = new Float32Array(10);
+    for (let o = 0; o < 10; o++) fc2Biases[o] = (fc2Rng() * 2 - 1) * 0.4;
+    fc2Scores = new Float32Array(10);
+    for (let o = 0; o < 10; o++) {
+        let sum = fc2Biases[o];
+        for (let i = 0; i < 128; i++) sum += fc1Activations[i] * fc2Weights[i * 10 + o];
+        fc2Scores[o] = sum; // raw score — ArgMax just picks the largest, no activation needed
+    }
+    // The demo input is always MNIST digit 3 (see buildInputHeights below).
+    // Untrained random weights have no reason to actually land on the right
+    // answer, so nudge that score up — ArgMax should visibly "get it right"
+    // for the digit the viewer can see on screen, not an arbitrary one.
+    const ACTUAL_DIGIT = 3;
+    const currentMax = Math.max(...fc2Scores);
+    fc2Scores[ACTUAL_DIGIT] = currentMax + Math.abs(currentMax) * 0.5 + 1;
+    argmaxDigit = 0;
+    for (let o = 1; o < 10; o++) if (fc2Scores[o] > fc2Scores[argmaxDigit]) argmaxDigit = o;
+
+    FLOW_STAGES = [
+        {
+            sourceIndex: 0, rawIndex: 1, reluIndex: 2, pooledIndex: 3,
+            filterCount: 8, channels: 1,
+            spacing: 0.34 + 0.04, rawW: 26, rawH: 26,
+            preRelu: conv1PreRelu, postRelu: conv1PostRelu, pooled: conv1Pooled, maxAbsArr: conv1MaxAbs,
+            // Per-filter durations (seconds at 1x; slider scales up to 64x).
+            convDuration: 115.2, reluDuration: 28.8, poolDuration: 28.8,
+        },
+        {
+            sourceIndex: 3, rawIndex: 4, reluIndex: 5, pooledIndex: 6,
+            filterCount: 16, channels: layerDefs[3].d,
+            spacing: conv1PooledSpacing, rawW: 11, rawH: 11,
+            preRelu: conv2PreRelu, postRelu: conv2PostRelu, pooled: conv2Pooled, maxAbsArr: conv2MaxAbs,
+            convDuration: 57.6, reluDuration: 14.4, poolDuration: 14.4,
+        },
+    ];
+
+    /* faint connecting pipes between consecutive layers */
+    for (let i = 0; i < layerCenters.length - 1; i++) {
+        const points = [layerCenters[i], layerCenters[i + 1]];
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+        const mat = new THREE.LineBasicMaterial({ color: 0x475569, transparent: true, opacity: 0.35 });
+        scene.add(new THREE.Line(geo, mat));
+    }
+
+    // Group the 3 real sub-steps of each conv block into one visual "Layer",
+    // matching the lab document's single "Conv1 + ReLU + Pool" line item.
+    addGroupBoundingBox([1, 2, 3], "Layer 1 — Conv1 + ReLU + Pool");
+    addGroupBoundingBox([4, 5, 6], "Layer 2 — Conv2 + ReLU + Pool");
+    addGroupBoundingBox([7, 8], "Layer 3 — Flatten + Fully Connected");
+    addGroupBoundingBox([9, 10], "Layer 4 — FC2 + ArgMax");
+
+    const totalX = LAYER_X[LAYER_X.length - 1];
+    controls.target.set(totalX / 2, 0, 0);
+    camera.position.set(totalX / 2 + 10, 20, 58);
+    controls.update();
+
+    populateTrainingPhaseScene();
+});
+
+/* ---------- click-to-inspect ---------- */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let selectedIndex = -1;
+const panelTitle = document.getElementById("panelTitle");
+const panelShape = document.getElementById("panelShape");
+const panelDesc = document.getElementById("panelDesc");
+
+function showLayerInfo(index) {
+    const def = layerDefs[index];
+    panelTitle.textContent = def.name;
+    panelShape.textContent = def.shape;
+    panelDesc.textContent = def.desc;
+    panelDesc.classList.remove("hint-default");
+    layerGroups.forEach((g, i) => {
+        g.scale.setScalar(i === index ? 1.06 : 1);
+    });
+}
+
+canvas.addEventListener("dblclick", (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(layerGroups, true);
+    if (hits.length) {
+        let obj = hits[0].object;
+        while (obj && obj.userData.layerIndex === undefined) obj = obj.parent;
+        if (!obj) return;
+        selectedIndex = obj.userData.layerIndex;
+        showLayerInfo(selectedIndex);
+        const state = stackAnimState[selectedIndex];
+        if (state) {
+            state.target = state.target > 0.5 ? 0 : 1;
+        }
+    }
+});
+
+/* ---------- "Play Data Flow" animation ----------
+   Two phases:
+   1. Kernel-scan phase (conv1, then conv2): a 3x3xC wireframe kernel slides,
+      stride 1 / padding 0, in raster order across the current source volume.
+      Sizes/step-counts follow the real formula (28->26 raw ->13 pooled,
+      13->11 raw ->5 pooled). Finishing a full pass over one filter reveals
+      that filter's real (illustrative) output values on its feature-map cells.
+   2. Dense-flow phase (conv2 -> FC1 -> FC2): the original traveling particle,
+      since there's no spatial kernel for fully-connected layers. */
+const playBtn = document.getElementById("playFlowBtn");
+const pauseBtn = document.getElementById("pauseFlowBtn");
+const restartBtn = document.getElementById("restartFlowBtn");
+const speedSlider = document.getElementById("speedSlider");
+const speedValueLabel = document.getElementById("speedValueLabel");
+
+let kernelSlices = []; // one 3x3 grid per source channel — see ensureKernelSlices()
+let kernelPhaseActive = false;
+let kernelStageIdx = 0;
+let kernelFilterIdx = 0;
+
+let flowSpeed = 1; // matches the slider's default center position
+let flowPaused = false;
+
+// Log-scale speed control: the slider position is an exponent, so it stays
+// comfortable to fine-tune near 1x while still reaching a much faster pace
+// at the top end for anyone who wants to blast through the whole animation.
+function formatSpeed(v) {
+    const rounded = v >= 10 ? Math.round(v) : Math.round(v * 100) / 100;
+    return rounded + "x";
+}
+function applySpeedFromSlider() {
+    flowSpeed = Math.pow(2, parseFloat(speedSlider.value));
+    speedValueLabel.textContent = formatSpeed(flowSpeed);
+}
+speedSlider.addEventListener("input", applySpeedFromSlider);
+applySpeedFromSlider();
+
+// "Auto gear": when on, speed snaps back to 1x at the start of every new
+// operation (Conv, ReLU, Pooling, Flatten, Fully Connected, ArgMax) — a
+// student who cranked the speed up to blast through one operation doesn't
+// have to remember to slow back down before the next one starts. They can
+// still speed back up manually any time; this only resets, never blocks.
+const autoGearBtn = document.getElementById("autoGearBtn");
+let autoGearActive = true;
+autoGearBtn.addEventListener("click", () => {
+    autoGearActive = !autoGearActive;
+    autoGearBtn.classList.toggle("active", autoGearActive);
+});
+function resetSpeedForNewOperation() {
+    if (!autoGearActive || flowSpeed <= 1) return;
+    speedSlider.value = 0;
+    applySpeedFromSlider();
+}
+
+// The kernel is drawn as an actual 3x3 grid (9 separate cells with visible
+// gaps), not one flat solid square — so it reads as "a 3x3 kernel", not just
+// a marker box.
+function buildKernelSliceGroup() {
+    const group = new THREE.Group();
+    const cellPos = [-1 / 3, 0, 1 / 3];
+    const cellSize = (1 / 3) * 0.94;
+    const fillMats = [], edgeMats = [], valueLabels = [];
+    for (let ry = 0; ry < 3; ry++) {
+        for (let rz = 0; rz < 3; rz++) {
+            const geo = new THREE.BoxGeometry(1, cellSize, cellSize);
+            const fillMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.68 });
+            const fillMesh = new THREE.Mesh(geo, fillMat);
+            const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
+            fillMesh.position.set(0, cellPos[ry], cellPos[rz]);
+            edges.position.copy(fillMesh.position);
+            group.add(fillMesh);
+            group.add(edges);
+            fillMats.push(fillMat);
+            edgeMats.push(edgeMat);
+
+            // TEMP DEBUG: the exact weight number on each cell, so it can be
+            // compared against the math panel's numbers directly instead of
+            // eyeballing colors on a screenshot — remove once the kernel's
+            // row/column orientation is confirmed correct.
+            const valueLbl = addLabelSprite("0.00", "#ffffff", { canvasW: 140, canvasH: 90, maxFontPx: 70 });
+            valueLbl.scale.set(0.55, 0.35, 1);
+            valueLbl.position.set(0, cellPos[ry], cellPos[rz]);
+            group.add(valueLbl);
+            valueLabels.push(valueLbl);
+        }
+    }
+    group.userData.fillMats = fillMats;
+    group.userData.edgeMats = edgeMats;
+    group.userData.valueLabels = valueLabels;
+    return group;
+}
+
+// A multi-channel kernel (e.g. 3x3x8 for Conv2) is really one 3x3 grid per
+// source channel. Each slice is parented to the source layer's group and,
+// every frame, copies the position of that channel's own cell mesh — so
+// when the user explodes the feature maps into separate cards, the kernel
+// slices follow them apart instead of staying fused as one solid block.
+function ensureKernelSlices(cfg) {
+    kernelSlices.forEach((s) => { if (s.parent) s.parent.remove(s); });
+    kernelSlices = [];
+    const inPlane = cfg.spacing * 3 * 1.05;
+    const depth = cfg.spacing * 1.1;
+    for (let c = 0; c < cfg.channels; c++) {
+        const slice = buildKernelSliceGroup();
+        slice.scale.set(depth, inPlane, inPlane);
+        layerGroups[cfg.sourceIndex].add(slice);
+        kernelSlices.push(slice);
+    }
+}
+
+// Colors every individual cell of every channel slice by that cell's own
+// real weight value — same signed-color scheme as the math panel's "Same
+// filter, in color" swatches — so the sliding kernel reads as actual
+// per-weight data instead of one flat scanner color.
+function setKernelWeightColors(cfg, filterIdx) {
+    const kernelData = kernelStageIdx === 0 ? conv1KernelsData[filterIdx] : conv2KernelsData[filterIdx];
+    const channels = cfg.channels;
+    const baseColor = layerFilterBaseColor[cfg.rawIndex][filterIdx];
+    const tint = baseColor.clone().lerp(new THREE.Color(0xffffff), 0.55);
+    for (let c = 0; c < channels; c++) {
+        const slice = kernelSlices[c];
+        const weights = [];
+        for (let i = 0; i < 9; i++) weights.push(kernelData[i * channels + c]);
+        const kMaxAbs = Math.max(1e-6, ...weights.map((v) => Math.abs(v)));
+        weights.forEach((wVal, i) => {
+            // Verified cell-by-cell against the math panel's exact numbers:
+            // the direct mapping (no row/column swap at all) is correct —
+            // every transform tried above this was actively wrong.
+            slice.userData.fillMats[i].color.copy(signedColor(wVal, kMaxAbs, baseColor));
+            updateSpriteText(slice.userData.valueLabels[i], wVal.toFixed(2), "#ffffff", 90);
+        });
+        slice.userData.edgeMats.forEach((m) => m.color.copy(tint));
+    }
+}
+
+const NEGATIVE_COLOR = new THREE.Color(0xef4444);
+// Pre-ReLU sums can be negative — tint the kernel red for "this would be
+// zeroed by ReLU" and toward the filter's own color for positive sums, so
+// Conv's raw output is visibly distinct from what ReLU/Pool do to it.
+function signedColor(value, maxAbsValue, baseColor) {
+    const t = Math.min(1, Math.abs(value) / maxAbsValue);
+    const hue = value < 0 ? NEGATIVE_COLOR : baseColor;
+    return new THREE.Color(0x11182b).lerp(hue, 0.3 + t * 0.7);
+}
+
+// The whole conv block runs as THREE sequential stages over ALL filters, in
+// the same order the student codes them as three separate Verilog modules:
+//   1. "conv"  — for each filter, the kernel slides stride-1 over the source,
+//                building that filter's raw (pre-activation) feature map.
+//                Only after all filters are done does the next stage begin.
+//   2. "relu"  — a ReLU pass sweeps over each raw feature map, producing the
+//                ReLU layer (negatives clamped to zero).
+//   3. "pool"  — a 2x2 max-pool pass sweeps over each ReLU feature map,
+//                producing the final Conv+ReLU+Pool feature map.
+let kernelSubPhase = "conv"; // "conv" | "relu" | "pool"
+let kernelPhaseT = 0;
+let kernelCy = 1, kernelCx = 1; // scan-window center on the SOURCE layer, in source-grid indices
+let kernelRow = 0, kernelCol = 0; // stride-1 index into the raw conv output (0-based)
+let lastRevealedRawStep = -1;
+let sweepLastStep = -1; // progressive-reveal cursor for the ReLU / Pool passes
+
+/* ---------- Math panel: the real numbers behind whichever step is playing ----------
+   A 2D side panel (not 3D) with one tab per operation. Whichever operation is
+   currently animating in 3D drives the panel automatically; clicking a tab
+   takes manual control until the next phase change, which reclaims it —
+   same idea as switching apps on a phone's home screen. */
+let mathPanelOp = "conv";
+let mathPanelAutoFollow = true;
+
+function fmtNum(v) {
+    return (v >= 0 ? " " : "") + v.toFixed(2);
+}
+
+function setMathPanelOp(op, auto) {
+    mathPanelOp = op;
+    if (auto) mathPanelAutoFollow = true;
+    document.querySelectorAll(".math-tab").forEach((btn) => btn.classList.toggle("active", btn.dataset.op === op));
+    const badge = document.getElementById("mathAutoBadge");
+    if (badge) {
+        badge.textContent = mathPanelAutoFollow ? "● following animation" : "○ manual";
+        badge.classList.toggle("manual", !mathPanelAutoFollow);
+    }
+    renderMathPanel();
+}
+
+function miniGrid(cols, cells) {
+    return `<div class="math-mini-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join("")}</div>`;
+}
+
+function swatchGrid(cols, cells) {
+    return `<div class="math-swatch-grid" style="grid-template-columns:repeat(${cols},1fr)">${cells.join("")}</div>`;
+}
+
+// The 3D kernel's row (Y) axis runs opposite to this panel's natural
+// top-first reading order — row 0 of the patch/kernel sits at the BOTTOM of
+// the 3D kernel, not the top (see (yy - def.h/2) in the cube-position math).
+// This swaps row order only (keeps each row's left-to-right order intact) so
+// the panel's vertical layout matches what's actually on screen.
+function flipKernelRows(cells) {
+    return [cells[6], cells[7], cells[8], cells[3], cells[4], cells[5], cells[0], cells[1], cells[2]];
+}
+
+function threeStyle(color) {
+    return `#${color.getHexString()}`;
+}
+
+function grayStyle(v) {
+    const c = Math.round(Math.min(1, Math.max(0, v)) * 255);
+    return `rgb(${c},${c},${c})`;
+}
+
+// Colors the "input patch" swatch exactly the way that pixel/cell is actually
+// colored in the 3D scene: raw input is grayscale intensity, anything deeper
+// in the pipeline (conv2's source is conv1's pooled output) uses that layer's
+// own filter-tinted pooled-cell formula (see revealPoolCell).
+function inputPatchColor(stageIdx, value) {
+    if (stageIdx === 0) return grayStyle(value);
+    const baseColor = layerFilterBaseColor[FLOW_STAGES[0].pooledIndex][0];
+    return threeStyle(baseColor.clone().multiplyScalar(0.35 + value * 0.9));
+}
+
+// Colors alone are meaningless without knowing what number they stand for —
+// this draws a small gradient bar labeled with the actual min/mid/max values
+// the current swatches were computed from, so the mapping stays legible even
+// though it's rescaled every time the kernel moves to a new position/filter.
+function colorScaleBar(colorStops, labels) {
+    const gradient = `linear-gradient(to right, ${colorStops.join(", ")})`;
+    return `
+        <div class="math-scale">
+            <div class="math-scale-bar" style="background:${gradient}"></div>
+            <div class="math-scale-labels">${labels.map((l) => `<span>${l}</span>`).join("")}</div>
+        </div>`;
+}
+
+// A small fixed ReLU(x) = max(0, x) plot: flat on the negative side, diagonal
+// on the positive side, with the current (raw, after-ReLU) pair as a dot.
+function reluGraphSvg(rawV, reluV, D) {
+    const w = 150, h = 100, mL = 14, mR = 10, mT = 10, mB = 14;
+    const pw = w - mL - mR, ph = h - mT - mB;
+    const yMin = -0.15 * D, yMax = D, ySpan = yMax - yMin;
+    const xToPx = (x) => mL + ((x + D) / (2 * D)) * pw;
+    const yToPx = (y) => mT + ((yMax - y) / ySpan) * ph;
+    const x0 = xToPx(-D), xMid = xToPx(0), xEnd = xToPx(D);
+    const yZero = yToPx(0), yTop = yToPx(D);
+    const px = xToPx(Math.max(-D, Math.min(D, rawV)));
+    const py = yToPx(Math.max(0, Math.min(D, reluV)));
+    return `
+        <svg class="math-relu-graph" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+            <line x1="${mL}" y1="${yZero}" x2="${w - mR}" y2="${yZero}" stroke="#334155" stroke-width="1"/>
+            <line x1="${xMid}" y1="${mT}" x2="${xMid}" y2="${h - mB}" stroke="#334155" stroke-width="1"/>
+            <polyline points="${x0},${yZero} ${xMid},${yZero} ${xEnd},${yTop}" fill="none" stroke="#facc15" stroke-width="2"/>
+            <circle cx="${px}" cy="${py}" r="4.5" fill="${rawV < 0 ? "#f87171" : "#4ade80"}" stroke="#0f172a" stroke-width="1.5"/>
+        </svg>`;
+}
+
+// Visual companion to the FC1/FC2 numeric sum: one source neuron (green dot,
+// left) fanning out to its destination neurons (right) — the first
+// `headCount` shown in full, then a "⋮" gap, then the LAST one (index
+// totalCount-1) so both ends of the row are visible, not just a prefix. Each
+// edge is labeled with its own weight index (w0, w1, …) and colored by that
+// connection's real weight. w0's dot (neuron #1 — the one fully computed
+// above) gets a highlighted ring, since bias belongs to that WHOLE neuron's
+// sum, not to this one edge — see the formula strip below the diagram
+// instead of trying to wire bias into this fan-out geometry.
+function fcFanSvg(weights, maxAbsW, baseColorHex, headCount, sourceLabel, lastSourceLabel) {
+    const totalCount = weights.length;
+    const w = 320, h = 220, leftX = 60, rightX = 250;
+    const baseColor = new THREE.Color(baseColorHex);
+    const head = Math.min(headCount, totalCount);
+    const showTail = totalCount > head + 1;
+    const topY = 16, rowStep = 22;
+    const headBottomY = topY + (head - 1) * rowStep;
+    const lastY = h - 16;
+    const sourceY = h / 2;
+
+    let lines = "", dots = "", labels = "";
+    for (let k = 0; k < head; k++) {
+        const y = topY + k * rowStep;
+        const color = threeStyle(signedColor(weights[k], maxAbsW, baseColor));
+        lines += `<line x1="${leftX}" y1="${sourceY}" x2="${rightX}" y2="${y}" stroke="${color}" stroke-width="2.2" opacity="0.9"/>`;
+        const ring = k === 0 ? `<circle cx="${rightX}" cy="${y}" r="8.5" fill="none" stroke="#facc15" stroke-width="1.5"/>` : "";
+        dots += `${ring}<circle cx="${rightX}" cy="${y}" r="5" fill="${color}" stroke="#0f172a" stroke-width="1"/>`;
+        labels += `<text x="${rightX + 10}" y="${y + 3}" fill="#94a3b8" font-size="9.5" font-family="'Courier New',monospace">w${k}${k === 0 ? " (neuron #1)" : ""}</text>`;
+    }
+    let tailSvg = "";
+    if (showTail) {
+        const lastIdx = totalCount - 1;
+        const color = threeStyle(signedColor(weights[lastIdx], maxAbsW, baseColor));
+        const midY = (headBottomY + lastY) / 2;
+        tailSvg = `
+            <text x="${(leftX + rightX) / 2}" y="${midY + 5}" fill="#64748b" font-size="16" text-anchor="middle">⋯</text>
+            <line x1="${leftX}" y1="${sourceY}" x2="${rightX}" y2="${lastY}" stroke="${color}" stroke-width="2.2" opacity="0.9"/>
+            <circle cx="${rightX}" cy="${lastY}" r="5" fill="${color}" stroke="#0f172a" stroke-width="1"/>
+            <text x="${rightX + 10}" y="${lastY + 3}" fill="#94a3b8" font-size="9.5" font-family="'Courier New',monospace">w${lastIdx}</text>`;
+    }
+    return `
+        <svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+            ${lines}${tailSvg}
+            <circle cx="${leftX}" cy="${sourceY}" r="8" fill="#4ade80" stroke="#0f172a" stroke-width="1.5"/>
+            <text x="${leftX}" y="${sourceY - 16}" fill="#94a3b8" font-size="10.5" text-anchor="middle">${sourceLabel}</text>
+            <text x="${leftX}" y="${sourceY + 22}" fill="#64748b" font-size="13" text-anchor="middle">⋮</text>
+            <text x="${leftX}" y="${sourceY + 38}" fill="#64748b" font-size="9.5" text-anchor="middle">${lastSourceLabel}</text>
+            ${dots}
+            ${labels}
+        </svg>`;
+}
+
+function renderConvMath() {
+    if (!FLOW_STAGES.length || !conv1KernelsData) return;
+    const stageIdx = Math.min(kernelStageIdx, FLOW_STAGES.length - 1);
+    const cfg = FLOW_STAGES[stageIdx];
+    const filterIdx = Math.min(kernelFilterIdx, cfg.filterCount - 1);
+    const row = kernelRow, col = kernelCol;
+    const srcW = stageIdx === 0 ? 28 : 13;
+    const channels = cfg.channels;
+    const kernelData = stageIdx === 0 ? conv1KernelsData[filterIdx] : conv2KernelsData[filterIdx];
+    const biasesArr = stageIdx === 0 ? conv1BiasesData : conv2BiasesData;
+    const biasF = biasesArr[filterIdx];
+    const getSrc = (yy, xx, ch) => (stageIdx === 0 ? inputHeightsData[yy * srcW + xx] : FLOW_STAGES[0].pooled[ch].data[yy * srcW + xx]);
+    const baseColor = layerFilterBaseColor[cfg.rawIndex][filterIdx];
+    const preReluMap = cfg.preRelu[filterIdx];
+    const rawValue = preReluMap.data[row * preReluMap.w + col];
+    const sumColor = threeStyle(signedColor(rawValue, cfg.maxAbsArr[filterIdx], baseColor));
+    // Scaled against every bias in this layer (not just this one filter) so
+    // the color is meaningful relative to the layer's actual bias range,
+    // instead of a single value always looking "fully saturated".
+    const biasMaxAbs = Math.max(1e-6, ...biasesArr.map((v) => Math.abs(v)));
+    const biasColor = threeStyle(signedColor(biasF, biasMaxAbs, baseColor));
+
+    if (channels === 1) {
+        let patchCells = [], kernelCells = [], patchSwatches = [], kernelSwatches = [];
+        const weights = [];
+        for (let ky = 0; ky < 3; ky++) for (let kx = 0; kx < 3; kx++) weights.push(kernelData[(ky * 3 + kx) * channels]);
+        const kMaxAbs = Math.max(1e-6, ...weights.map((v) => Math.abs(v)));
+        let wi = 0, dotSum = 0;
+        for (let ky = 0; ky < 3; ky++) {
+            for (let kx = 0; kx < 3; kx++) {
+                const srcVal = getSrc(row + ky, col + kx, 0);
+                const wVal = weights[wi++];
+                dotSum += srcVal * wVal;
+                patchCells.push(`<div class="math-cell">${fmtNum(srcVal)}</div>`);
+                kernelCells.push(`<div class="math-cell">${fmtNum(wVal)}</div>`);
+                patchSwatches.push(`<div class="math-swatch" style="background:${inputPatchColor(stageIdx, srcVal)}"></div>`);
+                kernelSwatches.push(`<div class="math-swatch" style="background:${threeStyle(signedColor(wVal, kMaxAbs, baseColor))}"></div>`);
+            }
+        }
+        patchCells = flipKernelRows(patchCells);
+        kernelCells = flipKernelRows(kernelCells);
+        patchSwatches = flipKernelRows(patchSwatches);
+        kernelSwatches = flipKernelRows(kernelSwatches);
+        const patchScale = colorScaleBar(
+            [inputPatchColor(stageIdx, 0), inputPatchColor(stageIdx, 1)],
+            ["0.00", "1.00"]
+        );
+        const filterScale = colorScaleBar(
+            [threeStyle(signedColor(-kMaxAbs, kMaxAbs, baseColor)), threeStyle(signedColor(0, kMaxAbs, baseColor)), threeStyle(signedColor(kMaxAbs, kMaxAbs, baseColor))],
+            [`-${kMaxAbs.toFixed(2)}`, "0", `+${kMaxAbs.toFixed(2)}`]
+        );
+        const biasScale = colorScaleBar(
+            [threeStyle(signedColor(-biasMaxAbs, biasMaxAbs, baseColor)), threeStyle(signedColor(0, biasMaxAbs, baseColor)), threeStyle(signedColor(biasMaxAbs, biasMaxAbs, baseColor))],
+            [`-${biasMaxAbs.toFixed(2)}`, "0", `+${biasMaxAbs.toFixed(2)}`]
+        );
+        document.getElementById("mathContent").innerHTML = `
+            <div class="math-flow">
+                <div class="math-col"><div class="math-label">Input patch</div>${miniGrid(3, patchCells)}</div>
+                <div class="math-op-symbol">×</div>
+                <div class="math-col"><div class="math-label">Filter #${filterIdx + 1} weights</div>${miniGrid(3, kernelCells)}</div>
+                <div class="math-op-symbol">Σ =</div>
+                <div class="math-col"><div class="math-label">Dot product</div><div class="math-result" style="font-size:16px;padding:6px 12px">${dotSum.toFixed(3)}</div></div>
+                <div class="math-op-symbol">+</div>
+                <div class="math-col"><div class="math-label">Bias (filter #${filterIdx + 1})</div><div class="math-result" style="font-size:16px;padding:6px 12px">${biasF.toFixed(3)}</div></div>
+                <div class="math-op-symbol">=</div>
+                <div class="math-col"><div class="math-label">Raw sum</div><div class="math-result">${rawValue.toFixed(3)}</div></div>
+            </div>
+            <p class="math-note">Row ${row}, column ${col} of filter #${filterIdx + 1}. The bias belongs to the filter itself, not to any one patch position — it's the same number added everywhere this filter is used across the whole image.</p>
+            <div class="math-flow math-visual-row">
+                <div class="math-col"><div class="math-label">Same patch, in color</div>${swatchGrid(3, patchSwatches)}${patchScale}</div>
+                <div class="math-op-symbol">×</div>
+                <div class="math-col"><div class="math-label">Same filter, in color</div>${swatchGrid(3, kernelSwatches)}${filterScale}</div>
+                <div class="math-op-symbol">+</div>
+                <div class="math-col"><div class="math-label">Same bias, in color</div><div class="math-swatch-result" style="width:40px;height:40px;background:${biasColor}"></div>${biasScale}</div>
+                <div class="math-op-symbol">Σ =</div>
+                <div class="math-col"><div class="math-label">Same sum, in color</div><div class="math-swatch-result" style="background:${sumColor}"></div></div>
+            </div>
+        `;
+        return;
+    }
+
+    // channels > 1 (conv2): every one of the kernel's channel-slices gets its
+    // own full patch × slice = partial-sum block, numeric AND colored, then
+    // a final section shows all those partial sums collapsing into one value.
+    const partialSums = [];
+    let channelBlocks = "";
+    for (let c = 0; c < channels; c++) {
+        let patchCells = [], kernelCells = [], patchSwatches = [], kernelSwatches = [];
+        const weights = [];
+        for (let ky = 0; ky < 3; ky++) for (let kx = 0; kx < 3; kx++) weights.push(kernelData[(ky * 3 + kx) * channels + c]);
+        const kMaxAbs = Math.max(1e-6, ...weights.map((v) => Math.abs(v)));
+        let partial = 0, wi = 0;
+        for (let ky = 0; ky < 3; ky++) {
+            for (let kx = 0; kx < 3; kx++) {
+                const srcVal = getSrc(row + ky, col + kx, c);
+                const wVal = weights[wi++];
+                partial += srcVal * wVal;
+                patchCells.push(`<div class="math-cell">${fmtNum(srcVal)}</div>`);
+                kernelCells.push(`<div class="math-cell">${fmtNum(wVal)}</div>`);
+                patchSwatches.push(`<div class="math-swatch" style="background:${inputPatchColor(stageIdx, srcVal)}"></div>`);
+                kernelSwatches.push(`<div class="math-swatch" style="background:${threeStyle(signedColor(wVal, kMaxAbs, baseColor))}"></div>`);
+            }
+        }
+        partialSums.push(partial);
+        const partialColor = threeStyle(signedColor(partial, cfg.maxAbsArr[filterIdx], baseColor));
+        patchCells = flipKernelRows(patchCells);
+        kernelCells = flipKernelRows(kernelCells);
+        patchSwatches = flipKernelRows(patchSwatches);
+        kernelSwatches = flipKernelRows(kernelSwatches);
+        const patchScale = colorScaleBar(
+            [inputPatchColor(stageIdx, 0), inputPatchColor(stageIdx, 1)],
+            ["0.00", "1.00"]
+        );
+        const filterScale = colorScaleBar(
+            [threeStyle(signedColor(-kMaxAbs, kMaxAbs, baseColor)), threeStyle(signedColor(0, kMaxAbs, baseColor)), threeStyle(signedColor(kMaxAbs, kMaxAbs, baseColor))],
+            [`-${kMaxAbs.toFixed(2)}`, "0", `+${kMaxAbs.toFixed(2)}`]
+        );
+        channelBlocks += `
+            <div class="math-channel-block">
+                <div class="math-label">Channel ${c + 1} of ${channels}</div>
+                <div class="math-flow">
+                    <div class="math-col"><div class="math-label">Input patch</div>${miniGrid(3, patchCells)}</div>
+                    <div class="math-op-symbol">×</div>
+                    <div class="math-col"><div class="math-label">Filter slice</div>${miniGrid(3, kernelCells)}</div>
+                    <div class="math-op-symbol">Σ =</div>
+                    <div class="math-col"><div class="math-label">Partial sum</div><div class="math-result" style="font-size:16px;padding:6px 12px">${partial.toFixed(3)}</div></div>
+                </div>
+                <div class="math-flow math-visual-row">
+                    <div class="math-col">${swatchGrid(3, patchSwatches)}${patchScale}</div>
+                    <div class="math-op-symbol">×</div>
+                    <div class="math-col">${swatchGrid(3, kernelSwatches)}${filterScale}</div>
+                    <div class="math-op-symbol">Σ =</div>
+                    <div class="math-col"><div class="math-swatch-result" style="width:40px;height:40px;background:${partialColor}"></div></div>
+                </div>
+            </div>`;
+    }
+    const chips = partialSums.map((sum, c) => `
+        <div class="math-channel-chip">
+            <span class="sw" style="background:${threeStyle(signedColor(sum, cfg.maxAbsArr[filterIdx], baseColor))}"></span>
+            ch${c + 1}: ${fmtNum(sum)}
+        </div>`).join("");
+
+    const dotSumTotal = partialSums.reduce((a, b) => a + b, 0);
+    document.getElementById("mathContent").innerHTML = `
+        <p class="math-note">This filter is really 3×3×${channels} — Conv1 produced ${channels} feature maps, so conv2's kernel has one 3×3 slice per channel. Row ${row}, column ${col} of filter #${filterIdx + 1}: each channel below multiplies its own patch by its own slice into a partial sum; all ${channels} partial sums are then added together, then this filter's own bias is added once at the end.</p>
+        ${channelBlocks}
+        <div class="math-combine-final">
+            <div class="math-label">Combine all ${channels} channels, then add this filter's own bias</div>
+            <div class="math-channel-list">${chips}</div>
+            <div class="math-flow" style="margin-top:12px">
+                <div class="math-op-symbol">Σ(ch. 1…${channels}) =</div>
+                <div class="math-col"><div class="math-result" style="font-size:16px;padding:6px 12px">${dotSumTotal.toFixed(3)}</div></div>
+                <div class="math-op-symbol">+</div>
+                <div class="math-col">
+                    <div class="math-label">Bias (filter #${filterIdx + 1})</div>
+                    <div class="math-result" style="font-size:16px;padding:6px 12px">${biasF.toFixed(3)}</div>
+                    <div class="math-swatch-result" style="width:24px;height:24px;margin-top:6px;background:${biasColor}"></div>
+                </div>
+                <div class="math-op-symbol">=</div>
+                <div class="math-col"><div class="math-result">${rawValue.toFixed(3)}</div></div>
+                <div class="math-op-symbol">→</div>
+                <div class="math-col"><div class="math-swatch-result" style="background:${sumColor}"></div></div>
+            </div>
+        </div>
+    `;
+}
+
+function renderReluMath() {
+    if (!FLOW_STAGES.length) return;
+    const cfg = FLOW_STAGES[Math.min(kernelStageIdx, FLOW_STAGES.length - 1)];
+    const filterIdx = Math.min(kernelFilterIdx, cfg.filterCount - 1);
+    const preReluMap = cfg.preRelu[filterIdx], postReluMap = cfg.postRelu[filterIdx];
+    const total = preReluMap.w * preReluMap.h;
+    const stepIdx = Math.min(total - 1, Math.max(0, sweepLastStep));
+    const py = Math.floor(stepIdx / preReluMap.w), px = stepIdx % preReluMap.w;
+    const rawV = preReluMap.data[py * preReluMap.w + px], reluV = postReluMap.data[py * preReluMap.w + px];
+    const D = Math.max(0.15, cfg.maxAbsArr[filterIdx]);
+
+    document.getElementById("mathContent").innerHTML = `
+        <div class="math-flow">
+            <div class="math-col"><div class="math-label">Raw value</div><div class="math-result" style="color:${rawV < 0 ? "#f87171" : "#facc15"}">${rawV.toFixed(3)}</div></div>
+            <div class="math-op-symbol">max(0, x) →</div>
+            <div class="math-col"><div class="math-label">After ReLU</div><div class="math-result">${reluV.toFixed(3)}</div></div>
+            <div class="math-col"><div class="math-label">ReLU(x) = max(0, x)</div>${reluGraphSvg(rawV, reluV, D)}</div>
+        </div>
+        <p class="math-note">${rawV < 0 ? "Negative sums clamp to exactly 0 — that's the entire ReLU function." : "This value was already non-negative, so ReLU leaves it completely unchanged."} The dot on the graph is this exact (raw, after-ReLU) pair sitting on the function's curve.</p>
+    `;
+}
+
+function renderPoolMath() {
+    if (!FLOW_STAGES.length) return;
+    const cfg = FLOW_STAGES[Math.min(kernelStageIdx, FLOW_STAGES.length - 1)];
+    const filterIdx = Math.min(kernelFilterIdx, cfg.filterCount - 1);
+    const postReluMap = cfg.postRelu[filterIdx], pooledMap = cfg.pooled[filterIdx];
+    const total = pooledMap.w * pooledMap.h;
+    const stepIdx = Math.min(total - 1, Math.max(0, sweepLastStep));
+    const py = Math.floor(stepIdx / pooledMap.w), px = stepIdx % pooledMap.w;
+    const vals = [
+        postReluMap.data[(py * 2) * postReluMap.w + px * 2],
+        postReluMap.data[(py * 2) * postReluMap.w + px * 2 + 1],
+        postReluMap.data[(py * 2 + 1) * postReluMap.w + px * 2],
+        postReluMap.data[(py * 2 + 1) * postReluMap.w + px * 2 + 1],
+    ];
+    const maxV = Math.max(...vals);
+    const cells = vals.map((v) => `<div class="math-cell ${v === maxV ? "highlight" : "dim"}">${fmtNum(v)}</div>`);
+
+    const reluBase = layerFilterBaseColor[cfg.reluIndex][filterIdx];
+    const swatches = vals.map((v) => {
+        const t = Math.min(1, v / cfg.maxAbsArr[filterIdx]);
+        const style = threeStyle(reluBase.clone().multiplyScalar(0.28 + t * 0.72));
+        return `<div class="math-swatch ${v === maxV ? "highlight" : ""}" style="background:${style}"></div>`;
+    });
+    const pooledV = pooledMap.data[py * pooledMap.w + px];
+    const pooledBase = layerFilterBaseColor[cfg.pooledIndex][filterIdx];
+    const resultColor = threeStyle(pooledBase.clone().multiplyScalar(0.35 + pooledV * 0.9));
+
+    document.getElementById("mathContent").innerHTML = `
+        <div class="math-flow">
+            <div class="math-col"><div class="math-label">2×2 block</div>${miniGrid(2, cells)}</div>
+            <div class="math-op-symbol">max() →</div>
+            <div class="math-col"><div class="math-label">Pooled value</div><div class="math-result">${maxV.toFixed(3)}</div></div>
+        </div>
+        <p class="math-note">Max-pooling keeps only the single largest of the 4 values in each 2×2 block — nothing else about it is "computed".</p>
+        <div class="math-flow math-visual-row">
+            <div class="math-col"><div class="math-label">Same block, in color</div>${swatchGrid(2, swatches)}</div>
+            <div class="math-op-symbol">max() →</div>
+            <div class="math-col"><div class="math-label">Same result, in color</div><div class="math-swatch-result" style="background:${resultColor}"></div></div>
+        </div>
+    `;
+}
+
+function renderFlattenMath() {
+    if (!flattenValues) return;
+    const step = Math.min(399, Math.max(0, flattenStep));
+    const filterIdx = Math.floor(step / 25), spatial = step % 25;
+    document.getElementById("mathContent").innerHTML = `
+        <div class="math-flow">
+            <div class="math-col"><div class="math-label">Pool2 filter #${filterIdx + 1}, cell ${spatial + 1}/25</div><div class="math-result">${flattenValues[step].toFixed(3)}</div></div>
+            <div class="math-op-symbol">copy →</div>
+            <div class="math-col"><div class="math-label">Flatten index</div><div class="math-result">[${step}]</div></div>
+        </div>
+        <p class="math-note">Flatten does no math at all — it just relabels each of the 400 pooled values with one linear index, channel by channel, so FC1 can treat them as a single long list.</p>
+    `;
+}
+
+function renderFcMath() {
+    if (!fc1Weights || !fc1Activations) return;
+    let html;
+    if (fc2PhaseActive) {
+        const o = 0;
+        const terms = [];
+        let dot = 0;
+        for (let i = 0; i < 128; i++) {
+            const term = fc1Activations[i] * fc2Weights[i * 10 + o];
+            dot += term;
+            if (i < 4) terms.push(`<div>fc1[${i}] × w = ${fc1Activations[i].toFixed(2)} × ${fmtNum(fc2Weights[i * 10 + o])} = ${fmtNum(term)}</div>`);
+        }
+        const bias = fc2Biases[o];
+        const sum = dot + bias;
+        const fc2BaseColor = new THREE.Color(0xdc2626);
+        const fc2BiasMaxAbs = Math.max(1e-6, ...Array.from(fc2Biases).map((v) => Math.abs(v)));
+        const biasColor2 = threeStyle(signedColor(bias, fc2BiasMaxAbs, fc2BaseColor));
+        const row0Weights = [];
+        for (let o2 = 0; o2 < 10; o2++) row0Weights.push(fc2Weights[0 * 10 + o2]);
+        const row0MaxAbs = Math.max(1e-6, ...row0Weights.map((v) => Math.abs(v)));
+        html = `
+            <div class="fc-param-summary">
+                <div class="fc-param-chip"><b>128 × 10 = 1,280</b>weights — one per (input, output) pair, laid out as a 128-row × 10-column matrix; column j holds every weight feeding INTO output neuron j</div>
+                <div class="fc-param-chip"><b>10</b>biases — one per output neuron, shared by all 128 of its incoming connections, not one per connection</div>
+                <div class="fc-param-chip total"><b>1,290</b>learnable parameters in FC2</div>
+            </div>
+            <div class="math-label">FC2 neuron #${o + 1} = sum of 128 weighted terms + its own bias</div>
+            <div class="math-formula">raw_score[0] &nbsp;=&nbsp; Σ<sub>i=0…127</sub> fc1[i] × w[i] &nbsp;+&nbsp; <span class="hl-b" style="color:${biasColor2}">bias[0]</span></div>
+            <div class="math-terms">${terms.join("")}<div>… + 124 more terms</div></div>
+            <div class="math-flow" style="margin-top:10px">
+                <div class="math-col">
+                    <div class="math-label">Dot product</div>
+                    <div class="math-result" style="font-size:16px;padding:6px 12px">${dot.toFixed(3)}</div>
+                    <div class="math-flow-sub">sum of all 128 terms</div>
+                </div>
+                <div class="math-op-symbol">+</div>
+                <div class="math-col">
+                    <div class="math-label">Bias (neuron #${o + 1})</div>
+                    <div class="math-result" style="font-size:16px;padding:6px 12px">${bias.toFixed(3)}</div>
+                    <div class="math-swatch-result" style="width:22px;height:22px;margin-top:6px;background:${biasColor2}"></div>
+                    <div class="math-flow-sub">added once, after the sum</div>
+                </div>
+                <div class="math-op-symbol">=</div>
+                <div class="math-col">
+                    <div class="math-label">Raw score</div>
+                    <div class="math-result">${sum.toFixed(3)}</div>
+                    <div class="math-flow-sub">this neuron's final output</div>
+                </div>
+            </div>
+            <p class="math-note">All 10 FC2 neurons sum every one of the 128 incoming values (each times its own weight) plus their own single bias — same fully-connected idea as FC1, just far fewer output neurons, and no ReLU here (ArgMax just compares these raw scores).</p>
+            <div class="math-visual-row">
+                <div class="math-label">fc1[0] (one of 128 FC1 outputs) fans out to all 10 FC2 neurons — edge color/label = that connection's real weight. The ringed dot (w0) is neuron #1, the one computed above.</div>
+                ${fcFanSvg(row0Weights, row0MaxAbs, 0xdc2626, 5, "fc1[0]", "fc1[127]")}
+                <div class="fc-formula-strip">
+                    fc1[0] × <span class="chip" style="background:${threeStyle(signedColor(row0Weights[0], row0MaxAbs, new THREE.Color(0xdc2626)))}">w0</span>
+                    &nbsp;+&nbsp; fc1[1] × w1 &nbsp;+⋯+&nbsp; fc1[127] × w127
+                    &nbsp;+&nbsp; <span class="chip" style="background:${biasColor2}">bias[0]</span>
+                    &nbsp;=&nbsp; <b style="color:#facc15">${sum.toFixed(3)}</b> (neuron #1's raw score)
+                </div>
+            </div>
+        `;
+    } else {
+        const o = 0;
+        const terms = [];
+        let dot = 0;
+        for (let i = 0; i < 400; i++) {
+            const term = flattenValues[i] * fc1Weights[i * 128 + o];
+            dot += term;
+            if (i < 4) terms.push(`<div>flat[${i}] × w = ${flattenValues[i].toFixed(2)} × ${fmtNum(fc1Weights[i * 128 + o])} = ${fmtNum(term)}</div>`);
+        }
+        const bias = fc1Biases[o];
+        const sum = dot + bias;
+        const fc1BaseColor = new THREE.Color(0xf59e0b);
+        const fc1BiasMaxAbs = Math.max(1e-6, ...Array.from(fc1Biases).map((v) => Math.abs(v)));
+        const biasColor1 = threeStyle(signedColor(bias, fc1BiasMaxAbs, fc1BaseColor));
+        const row0Weights128 = [];
+        for (let o2 = 0; o2 < 128; o2++) row0Weights128.push(fc1Weights[0 * 128 + o2]);
+        const row0MaxAbs128 = Math.max(1e-6, ...row0Weights128.map((v) => Math.abs(v)));
+        html = `
+            <div class="fc-param-summary">
+                <div class="fc-param-chip"><b>400 × 128 = 51,200</b>weights — one per (input, output) pair, laid out as a 400-row × 128-column matrix; column j holds every weight feeding INTO FC1 neuron j</div>
+                <div class="fc-param-chip"><b>128</b>biases — one per output neuron, shared by all 400 of its incoming connections, not one per connection</div>
+                <div class="fc-param-chip total"><b>51,328</b>learnable parameters in FC1</div>
+            </div>
+            <div class="math-label">FC1 neuron #${o + 1} = sum of 400 weighted terms + its own bias, then ReLU</div>
+            <div class="math-formula">raw_sum[0] &nbsp;=&nbsp; Σ<sub>i=0…399</sub> flat[i] × w[i] &nbsp;+&nbsp; <span class="hl-b" style="color:${biasColor1}">bias[0]</span></div>
+            <div class="math-terms">${terms.join("")}<div>… + 396 more terms</div></div>
+            <div class="math-flow" style="margin-top:10px">
+                <div class="math-col">
+                    <div class="math-label">Dot product</div>
+                    <div class="math-result" style="font-size:16px;padding:6px 12px">${dot.toFixed(3)}</div>
+                    <div class="math-flow-sub">sum of all 400 terms</div>
+                </div>
+                <div class="math-op-symbol">+</div>
+                <div class="math-col">
+                    <div class="math-label">Bias (neuron #${o + 1})</div>
+                    <div class="math-result" style="font-size:16px;padding:6px 12px">${bias.toFixed(3)}</div>
+                    <div class="math-swatch-result" style="width:22px;height:22px;margin-top:6px;background:${biasColor1}"></div>
+                    <div class="math-flow-sub">added once, after the sum</div>
+                </div>
+                <div class="math-op-symbol">=</div>
+                <div class="math-col">
+                    <div class="math-label">Raw sum</div>
+                    <div class="math-result">${sum.toFixed(3)} → ReLU → ${Math.max(0, sum).toFixed(3)}</div>
+                    <div class="math-flow-sub">this neuron's final output</div>
+                </div>
+            </div>
+            <p class="math-note">All 128 FC1 neurons sum every one of the 400 flattened values (each times its own weight) plus their own single bias, then apply ReLU — this is what "fully connected" means: every input touches every output, and each output owns exactly one bias.</p>
+            <div class="math-visual-row">
+                <div class="math-label">flat[0] (one of 400 flattened values) fans out to all 128 FC1 neurons — edge color/label = that connection's real weight. The ringed dot (w0) is neuron #1, the one computed above.</div>
+                ${fcFanSvg(row0Weights128, row0MaxAbs128, 0xf59e0b, 5, "flat[0]", "flat[399]")}
+                <div class="fc-formula-strip">
+                    flat[0] × <span class="chip" style="background:${threeStyle(signedColor(row0Weights128[0], row0MaxAbs128, new THREE.Color(0xf59e0b)))}">w0</span>
+                    &nbsp;+&nbsp; flat[1] × w1 &nbsp;+⋯+&nbsp; flat[399] × w399
+                    &nbsp;+&nbsp; <span class="chip" style="background:${biasColor1}">bias[0]</span>
+                    &nbsp;=&nbsp; <b style="color:#facc15">${sum.toFixed(3)}</b> (neuron #1's raw sum, before ReLU)
+                </div>
+            </div>
+        `;
+    }
+    document.getElementById("mathContent").innerHTML = html;
+}
+
+function renderArgmaxMath() {
+    if (!fc2Scores) {
+        document.getElementById("mathContent").innerHTML = '<p class="math-note">Waiting for FC2 scores…</p>';
+        return;
+    }
+    const maxAbsScore = Math.max(1e-6, ...Array.from(fc2Scores).map((v) => Math.abs(v)));
+    let rows = "";
+    for (let o = 0; o < 10; o++) {
+        const isWinner = o === argmaxDigit;
+        const widthPx = Math.max(4, (Math.abs(fc2Scores[o]) / maxAbsScore) * 90);
+        rows += `<div class="math-score-row ${isWinner ? "winner" : ""}">
+            <span style="width:14px">${o}</span>
+            <span class="math-score-bar" style="width:${widthPx}px"></span>
+            <span>${fc2Scores[o].toFixed(2)}</span>
+            ${isWinner ? "<span>← argmax</span>" : ""}
+        </div>`;
+    }
+    document.getElementById("mathContent").innerHTML = `
+        <div class="math-score-list">${rows}</div>
+        <p class="math-note">ArgMax scans these 10 raw scores and returns the index of the largest one — here, digit ${argmaxDigit}. No weights, no multiplication, just a comparison.</p>
+    `;
+}
+
+function renderMathPanel() {
+    if (!document.getElementById("mathContent")) return;
+    try {
+        if (mathPanelOp === "conv") renderConvMath();
+        else if (mathPanelOp === "relu") renderReluMath();
+        else if (mathPanelOp === "pool") renderPoolMath();
+        else if (mathPanelOp === "flatten") renderFlattenMath();
+        else if (mathPanelOp === "fc") renderFcMath();
+        else if (mathPanelOp === "argmax") renderArgmaxMath();
+    } catch (e) { /* underlying data not ready yet on first paint */ }
+}
+
+/* ---------- "What was constructed during training" — its own small 3D gallery ----------
+   A second, independent three.js scene/camera/renderer/controls (same orbit/
+   zoom/pan feel as the main architecture viewer above), showing every
+   learnable slot in the network at once: Conv1/Conv2's actual kernel cubes
+   and FC1/FC2's actual weight matrices, side by side. Nothing here "flows" —
+   this is a static reference, not a training simulation. */
+const tpCanvas = document.getElementById("training-canvas");
+const tpWrap = document.getElementById("training-canvas-wrap");
+const tpScene = new THREE.Scene();
+tpScene.background = null;
+const tpCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+tpCamera.position.set(-1, 20, 58);
+const tpRenderer = new THREE.WebGLRenderer({ canvas: tpCanvas, antialias: true, alpha: true });
+tpRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const tpControls = new OrbitControls(tpCamera, tpRenderer.domElement);
+tpControls.enableDamping = true;
+tpControls.dampingFactor = 0.08;
+tpControls.minDistance = 6;
+tpControls.maxDistance = 90;
+tpControls.zoomSpeed = 3.0;
+tpControls.zoomToCursor = true;
+tpControls.target.set(-1, 3, 0);
+tpCanvas.addEventListener("wheel", (e) => { e.preventDefault(); }, { passive: false });
+
+tpScene.add(new THREE.AmbientLight(0xffffff, 0.9));
+const tpDir = new THREE.DirectionalLight(0xffffff, 1.0);
+tpDir.position.set(10, 20, 15);
+tpScene.add(tpDir);
+
+// One 3x3(x1) kernel as 9 small cubes — same signed-color scheme (red =
+// negative, filter's own hue = positive) AND the same row orientation used
+// everywhere else on this page: row 0 sits at the BOTTOM (see (yy - h/2) in
+// the main pipeline's cube-position math), not the top, so this gallery
+// visually matches the sliding kernel in the animation above it.
+function buildMiniKernelGroup(values, maxAbsW, baseColor, cellSize) {
+    const group = new THREE.Group();
+    const gap = cellSize * 0.12;
+    const geo = new THREE.BoxGeometry(cellSize, cellSize, cellSize * 0.5);
+    for (let ky = 0; ky < 3; ky++) {
+        for (let kx = 0; kx < 3; kx++) {
+            const color = signedColor(values[ky * 3 + kx], maxAbsW, baseColor);
+            const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.1 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set((kx - 1) * (cellSize + gap), (ky - 1) * (cellSize + gap), 0);
+            group.add(mesh);
+        }
+    }
+    return group;
+}
+
+// Parented to `parent` (a group) using LOCAL coordinates, not added straight
+// to the scene — so if that group's own position later moves (Conv2's does,
+// dynamically, see layoutConv2Rows), the title rides along with it instead
+// of being left behind at a stale world position.
+function addGroupTitle(text, color, parent, x, y, z) {
+    const sprite = addLabelSprite(text, color, { canvasW: 320, canvasH: 100, maxFontPx: 64 });
+    sprite.scale.set(3.3 * 5, 1.03 * 5, 1);
+    sprite.position.set(x, y, z);
+    parent.add(sprite);
+}
+
+// Same collapsed-deck <-> exploded-row transition as the main pipeline's
+// feature-map cards (see updateStackAnimations/EXPAND_SPEED/STAGGER below),
+// just scoped to this gallery: one entry per Conv2 filter, each holding its
+// 8 channel-slice meshes.
+const tpFilterAnimState = {};
+let tpConv2Rows = [], conv2CollapsedHW = 0, conv2ExplodedHW = 0;
+let tpConv2Group = null, conv1RightEdge = 0;
+const CONV1_CONV2_GAP = 3;
+
+// A single full cube (not the flat 0.5-depth cell used for kernel weights)
+// so a bias reads as visually distinct from the 3x3 weight grid it sits
+// beside — colored with the exact same signedColor scheme, scaled against
+// every bias in that layer, matching the "Same bias, in color" swatch in
+// the main animation's math panel exactly.
+function buildBiasCube(value, maxAbsW, baseColor, cellSize) {
+    const geo = new THREE.BoxGeometry(cellSize, cellSize, cellSize);
+    const mat = new THREE.MeshStandardMaterial({ color: signedColor(value, maxAbsW, baseColor), roughness: 0.5, metalness: 0.1 });
+    return new THREE.Mesh(geo, mat);
+}
+
+function populateTrainingPhaseScene() {
+    if (!conv1KernelsData || !conv2KernelsData || !conv1BiasesData || !conv2BiasesData) return;
+    const conv1Raw = FLOW_STAGES[0].rawIndex, conv2Raw = FLOW_STAGES[1].rawIndex;
+    const conv1BiasMaxAbs = Math.max(1e-6, ...conv1BiasesData.map((v) => Math.abs(v)));
+    const conv2BiasMaxAbs = Math.max(1e-6, ...conv2BiasesData.map((v) => Math.abs(v)));
+
+    // Conv1 — 8 filters, 4 columns x 2 rows, side by side in one flat plane
+    // (column varies X, row varies Y — never Z, so nothing sits front-to-back
+    // behind anything else). Only 1 channel each, so there's nothing to
+    // explode — always fully shown.
+    const conv1Group = new THREE.Group();
+    const cs1 = 0.52, sp1 = 6.0;
+    const miniHalfWidth1 = (cs1 + cs1 * 0.12) + cs1 / 2;
+    conv1KernelsData.forEach((k, f) => {
+        const maxAbsW = Math.max(1e-6, ...Array.from(k).map((v) => Math.abs(v)));
+        const base = layerFilterBaseColor[conv1Raw][f];
+        const mini = buildMiniKernelGroup(k, maxAbsW, base, cs1);
+        const col = f % 4, row = Math.floor(f / 4);
+        const homeX = (col - 1.5) * sp1, homeY = (0.5 - row) * sp1;
+        mini.position.set(homeX, homeY, 0);
+        conv1Group.add(mini);
+        const lbl = addLabelSprite(`F${f + 1}`, "#94a3b8", { canvasW: 160, canvasH: 90, maxFontPx: 70 });
+        lbl.scale.set(0.85 * 3, 0.48 * 3, 1);
+        lbl.position.set(homeX, homeY - 1.7, 0);
+        conv1Group.add(lbl);
+
+        const biasCube = buildBiasCube(conv1BiasesData[f], conv1BiasMaxAbs, base, cs1);
+        biasCube.position.set(homeX + miniHalfWidth1 + 0.75, homeY, 0);
+        conv1Group.add(biasCube);
+        const biasLbl = addLabelSprite("bias", "#cbd5e1", { canvasW: 110, canvasH: 70, maxFontPx: 60 });
+        biasLbl.scale.set(0.38 * 5, 0.27 * 5, 1);
+        biasLbl.position.set(0, -0.55, 0);
+        biasCube.add(biasLbl);
+    });
+    conv1Group.position.x = -13;
+    tpScene.add(conv1Group);
+    addGroupTitle("Conv1 — 8 × (3×3×1)", "#2563eb", conv1Group, 0, 7, 0);
+
+    // Conv1 never changes size (nothing to explode), so its right edge is a
+    // fixed world-X value — Conv2's own group position is kept dynamically
+    // clear of it below (see layoutConv2Rows), the same way Conv2's 16
+    // filters stay dynamically clear of each other.
+    conv1RightEdge = conv1Group.position.x + 1.5 * sp1 + miniHalfWidth1;
+
+    // Conv2 — 16 filters, 4 columns x 4 rows (fixed row spacing; column
+    // spacing within a row is DYNAMIC — see layoutConv2Rows below). Each
+    // filter starts collapsed (its 8 channel-slices fanned into a thin deck
+    // along Z) and double-clicking it explodes them into a 2x4 grid (not a
+    // single 1x8 row), revealing channel 1..8 in order via the same
+    // staggered collapse<->explode transition as the main pipeline's
+    // feature-map cards (see updateTpFilterAnimations below).
+    const conv2Group = new THREE.Group();
+    // collapsedDepth must exceed each cube's own Z depth (cellSize * 0.5,
+    // see buildMiniKernelGroup) or adjacent channels literally intersect
+    // when stacked into the collapsed "deck" — that interpenetration, not a
+    // camera-angle illusion, was the real cause of the channels looking
+    // jumbled/glittery into each other.
+    const cs2 = 0.52, chanSp2 = 2.2, collapsedDepth = 0.36;
+    // Taller than before to give the now-wider-spaced 2x4 exploded channel
+    // grid enough vertical clearance that it doesn't collide with the row
+    // above/below when exploded.
+    const gridRowSp2 = 4.6;
+    // Half-widths a filter actually occupies collapsed vs. fully exploded
+    // (2 columns either side of center, plus the mini-kernel's own half
+    // width) — layoutConv2Rows uses these to keep row spacing tight when
+    // everything's collapsed and pushes neighbors apart only as needed.
+    const miniHalfWidth = (cs2 + cs2 * 0.12) + cs2 / 2;
+    // Both now reach past the channel grid itself, out to the bias cube
+    // parked at its edge (miniHalfWidth + 0.75, plus that cube's own half
+    // width) — otherwise the row reflow wouldn't reserve enough room for it
+    // and it would collide with the neighboring filter.
+    conv2CollapsedHW = miniHalfWidth + 0.75 + cs2 / 2;
+    conv2ExplodedHW = 1.5 * chanSp2 + miniHalfWidth + 0.75 + cs2 / 2;
+    tpConv2Rows = [[], [], [], []];
+    conv2KernelsData.forEach((k, f) => {
+        const base = layerFilterBaseColor[conv2Raw][f];
+        const gridRow = Math.floor(f / 4);
+        const homeY = (1.5 - gridRow) * gridRowSp2;
+        const filterGroup = new THREE.Group();
+        filterGroup.userData.filterIndex = f;
+        const items = [];
+        for (let c = 0; c < 8; c++) {
+            const chanVals = [];
+            for (let i = 0; i < 9; i++) chanVals.push(k[i * 8 + c]);
+            const maxAbsW = Math.max(1e-6, ...chanVals.map((v) => Math.abs(v)));
+            const mini = buildMiniKernelGroup(chanVals, maxAbsW, base, cs2);
+            // 2 rows x 4 columns when exploded, not one long 1x8 row.
+            const gc = c % 4, gr = Math.floor(c / 4);
+            // (3.5 - c), not (c - 3.5): the camera sits at positive Z looking
+            // toward the scene, so a LARGER Z is closer to the viewer — this
+            // way channel 1 (c=0) ends up frontmost in the collapsed deck,
+            // not channel 8.
+            const collapsed = new THREE.Vector3(0, 0, (3.5 - c) * collapsedDepth);
+            const expanded = new THREE.Vector3((gc - 1.5) * chanSp2, (0.5 - gr) * chanSp2, 0);
+            mini.position.copy(collapsed);
+            filterGroup.add(mini);
+            items.push({ mesh: mini, collapsed, expanded, filterIndex: c });
+
+            // Which channel number this slice is — only readable once the
+            // filter is exploded (fades in with the same progress as the move).
+            const chLbl = addLabelSprite(`ch${c + 1}`, "#cbd5e1", { canvasW: 100, canvasH: 70, maxFontPx: 60 });
+            chLbl.scale.set(0.38 * 5, 0.27 * 5, 1);
+            chLbl.material.opacity = 0;
+            chLbl.visible = false;
+            chLbl.position.copy(collapsed);
+            filterGroup.add(chLbl);
+            const expandedLbl = new THREE.Vector3((gc - 1.5) * chanSp2, (0.5 - gr) * chanSp2 - 0.6, 0);
+            items.push({ mesh: chLbl, collapsed, expanded: expandedLbl, filterIndex: c, kind: "label" });
+        }
+
+        // This filter's own single bias, always visible, sliding clear of
+        // the channels as they spread out (same collapsed<->expanded idea,
+        // parked just past whichever edge — thin deck or full 2x4 — is
+        // currently in effect) instead of fading like the channel labels.
+        const biasCube2 = buildBiasCube(conv2BiasesData[f], conv2BiasMaxAbs, base, cs2);
+        const biasCollapsed = new THREE.Vector3(miniHalfWidth + 0.75, 0, 0);
+        const biasExpanded = new THREE.Vector3(1.5 * chanSp2 + miniHalfWidth + 0.75, 0, 0);
+        biasCube2.position.copy(biasCollapsed);
+        filterGroup.add(biasCube2);
+        items.push({ mesh: biasCube2, collapsed: biasCollapsed, expanded: biasExpanded, filterIndex: 3.5 });
+        const biasLbl2 = addLabelSprite("bias", "#cbd5e1", { canvasW: 110, canvasH: 70, maxFontPx: 60 });
+        biasLbl2.scale.set(0.38 * 5, 0.27 * 5, 1);
+        biasLbl2.position.set(0, -0.55, 0);
+        biasCube2.add(biasLbl2);
+
+        filterGroup.position.set(0, homeY, 0);
+        conv2Group.add(filterGroup);
+        const state = { progress: 0, target: 0, items, filterCount: 8, group: filterGroup };
+        tpFilterAnimState[f] = state;
+        tpConv2Rows[gridRow].push(state);
+
+        const lbl = addLabelSprite(`F${f + 1}`, "#64748b", { canvasW: 120, canvasH: 90, maxFontPx: 66 });
+        lbl.scale.set(0.6 * 3, 0.42 * 3, 1);
+        lbl.position.set(0, -2.3, 0);
+        filterGroup.add(lbl);
+    });
+    // Initial X is provisional — layoutConv2Rows (called every frame) keeps
+    // it dynamically clear of Conv1's fixed right edge from here on.
+    conv2Group.position.x = conv1RightEdge + CONV1_CONV2_GAP + conv2CollapsedHW;
+    tpConv2Group = conv2Group;
+    tpScene.add(conv2Group);
+    addGroupTitle("Conv2 — 16 × (3×3×8)", "#16a34a", conv2Group, 0, 9.5, 0);
+}
+
+// Every Conv2 row's filters start packed close together (collapsed = small
+// half-width) and, as any of them explodes, the whole row re-centers with
+// just enough spacing to keep that filter's growing footprint from
+// colliding with its neighbors — reverting automatically as it re-collapses.
+// The whole Conv2 group is then, in turn, kept dynamically clear of Conv1's
+// fixed right edge using whichever row currently needs the most room —
+// exactly the same idea, one level up.
+// The gap between two neighboring filters isn't flat — it scales from 1x
+// (both collapsed) up to 2x (either one fully exploded), so two open
+// kernels end up twice as far apart as two closed ones, not just however
+// much extra room their own growing width already pushes in.
+const CONV2_ROW_GAP = 1.0;
+function layoutConv2Rows() {
+    let maxRowHalfWidth = conv2CollapsedHW;
+    tpConv2Rows.forEach((row) => {
+        const halfWidths = row.map((state) => conv2CollapsedHW + (conv2ExplodedHW - conv2CollapsedHW) * state.progress);
+        const gaps = [];
+        for (let i = 0; i < row.length - 1; i++) {
+            const p = Math.max(row[i].progress, row[i + 1].progress);
+            gaps.push(CONV2_ROW_GAP * (1 + p));
+        }
+        const totalWidth = halfWidths.reduce((a, hw) => a + hw * 2, 0) + gaps.reduce((a, g) => a + g, 0);
+        maxRowHalfWidth = Math.max(maxRowHalfWidth, totalWidth / 2);
+        let cursor = -totalWidth / 2;
+        row.forEach((state, i) => {
+            state.group.position.x = cursor + halfWidths[i];
+            cursor += halfWidths[i] * 2 + (gaps[i] || 0);
+        });
+    });
+    if (tpConv2Group) {
+        tpConv2Group.position.x = conv1RightEdge + CONV1_CONV2_GAP + maxRowHalfWidth;
+    }
+}
+
+// Same easing/stagger math as updateStackAnimations (defined later in this
+// file) — kept as a separate function since it drives a different state
+// object (tpFilterAnimState) scoped to this gallery, not the main pipeline.
+function updateTpFilterAnimations(dt) {
+    Object.values(tpFilterAnimState).forEach((state) => {
+        if (state.progress < state.target) {
+            state.progress = Math.min(state.target, state.progress + dt * EXPAND_SPEED);
+        } else if (state.progress > state.target) {
+            state.progress = Math.max(state.target, state.progress - dt * EXPAND_SPEED);
+        }
+        const gp = state.progress;
+        state.items.forEach((item) => {
+            const start = (item.filterIndex / state.filterCount) * STAGGER;
+            const local = Math.min(1, Math.max(0, (gp - start) / (1 - STAGGER)));
+            const eased = easeInOutCubic(local);
+            item.mesh.position.lerpVectors(item.collapsed, item.expanded, eased);
+            if (item.kind === "label") {
+                item.mesh.visible = eased > 0.001;
+                item.mesh.material.opacity = eased;
+            }
+        });
+    });
+    layoutConv2Rows();
+}
+
+// Double-click a Conv2 filter to toggle it collapsed <-> exploded.
+const tpRaycaster = new THREE.Raycaster();
+const tpPointer = new THREE.Vector2();
+tpCanvas.addEventListener("dblclick", (ev) => {
+    const rect = tpCanvas.getBoundingClientRect();
+    tpPointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    tpPointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+    tpRaycaster.setFromCamera(tpPointer, tpCamera);
+    const hits = tpRaycaster.intersectObjects(tpScene.children, true);
+    if (!hits.length) return;
+    let obj = hits[0].object;
+    while (obj && obj.userData.filterIndex === undefined) obj = obj.parent;
+    if (!obj) return;
+    const state = tpFilterAnimState[obj.userData.filterIndex];
+    if (state) state.target = state.target > 0.5 ? 0 : 1;
+});
+
+function resizeTrainingPhase() {
+    const w = tpWrap.clientWidth, h = tpWrap.clientHeight;
+    tpRenderer.setSize(w, h, false);
+    tpCamera.aspect = w / Math.max(h, 1);
+    tpCamera.updateProjectionMatrix();
+}
+new ResizeObserver(resizeTrainingPhase).observe(tpWrap);
+resizeTrainingPhase();
+
+document.querySelectorAll(".math-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+        mathPanelAutoFollow = false;
+        setMathPanelOp(btn.dataset.op, false);
+    });
+});
+setMathPanelOp("conv", true);
+
+// Re-reads each channel's cell mesh position and copies it onto the matching
+// kernel slice. Called every frame during the conv sub-phase so the kernel
+// keeps following the source cells even while paused or exploding.
+function positionKernelSlices(cfg) {
+    for (let c = 0; c < cfg.channels; c++) {
+        kernelSlices[c].position.copy(layerCubeGrid[cfg.sourceIndex][c][kernelCy][kernelCx].position);
+    }
+    updateFlowLinks(cfg);
+}
+
+function beginFilterConvScan(cfg) {
+    kernelSubPhase = "conv";
+    kernelPhaseT = 0;
+    kernelRow = 0;
+    kernelCol = 0;
+    kernelCy = 1;
+    kernelCx = 1;
+    lastRevealedRawStep = -1;
+    kernelSlices.forEach((s) => { s.visible = true; });
+    setKernelWeightColors(cfg, kernelFilterIdx);
+    positionKernelSlices(cfg);
+    setMathPanelOp("conv", true);
+}
+
+function attachKernelToStage(cfg) {
+    ensureKernelSlices(cfg);
+    ensureFlowLines(cfg.channels);
+    kernelFilterIdx = 0;
+    beginFilterConvScan(cfg);
+}
+
+// Conv: paint one raw (pre-activation) cell — signed color (red = negative).
+function revealRawCell(cfg, filterIdx, row, col) {
+    const preReluMap = cfg.preRelu[filterIdx];
+    const v = preReluMap.data[row * preReluMap.w + col];
+    const c = signedColor(v, cfg.maxAbsArr[filterIdx], layerFilterBaseColor[cfg.rawIndex][filterIdx]);
+    const mesh = layerCubeGrid[cfg.rawIndex][filterIdx][row][col];
+    mesh.material.color.copy(c);
+    mesh.material.emissive.copy(c).multiplyScalar(0.25);
+}
+function revealAllRawCells(cfg, filterIdx) {
+    const m = cfg.preRelu[filterIdx];
+    for (let yy = 0; yy < m.h; yy++) for (let xx = 0; xx < m.w; xx++) revealRawCell(cfg, filterIdx, yy, xx);
+}
+
+// ReLU: paint one output cell — negatives are already zero, so they render dark.
+function revealReluCell(cfg, filterIdx, yy, xx) {
+    const m = cfg.postRelu[filterIdx];
+    const v = m.data[yy * m.w + xx];
+    const t = Math.min(1, v / cfg.maxAbsArr[filterIdx]);
+    const c = layerFilterBaseColor[cfg.reluIndex][filterIdx].clone().multiplyScalar(0.28 + t * 0.72);
+    const mesh = layerCubeGrid[cfg.reluIndex][filterIdx][yy][xx];
+    mesh.material.color.copy(c);
+    mesh.material.emissive.copy(c).multiplyScalar(0.25);
+}
+function revealAllReluCells(cfg, filterIdx) {
+    const m = cfg.postRelu[filterIdx];
+    for (let yy = 0; yy < m.h; yy++) for (let xx = 0; xx < m.w; xx++) revealReluCell(cfg, filterIdx, yy, xx);
+}
+
+// Pool: paint one output cell of the final feature map.
+function revealPoolCell(cfg, filterIdx, yy, xx) {
+    const m = cfg.pooled[filterIdx];
+    const v = m.data[yy * m.w + xx];
+    const c = layerFilterBaseColor[cfg.pooledIndex][filterIdx].clone().multiplyScalar(0.35 + v * 0.9);
+    const mesh = layerCubeGrid[cfg.pooledIndex][filterIdx][yy][xx];
+    mesh.material.color.copy(c);
+    mesh.material.emissive.copy(c).multiplyScalar(0.3);
+}
+function revealAllPooledCells(cfg, filterIdx) {
+    const m = cfg.pooled[filterIdx];
+    for (let yy = 0; yy < m.h; yy++) for (let xx = 0; xx < m.w; xx++) revealPoolCell(cfg, filterIdx, yy, xx);
+}
+
+// One thin gray rod per source channel, converging on the exact raw cell
+// currently being computed. No arrowhead: the target cell's edges light up
+// white instead. Only used during the Conv sub-phase.
+let flowLines = [];
+function ensureFlowLines(count) {
+    while (flowLines.length < count) {
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const mat = new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.4 });
+        const line = new THREE.Line(geo, mat);
+        scene.add(line);
+        flowLines.push(line);
+    }
+    for (let i = 0; i < flowLines.length; i++) flowLines[i].visible = i < count;
+    return flowLines;
+}
+
+let targetHighlight = null;
+function ensureTargetHighlight() {
+    if (targetHighlight) return targetHighlight;
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.LineBasicMaterial({ color: 0xffffff });
+    targetHighlight = new THREE.LineSegments(new THREE.EdgesGeometry(geo), mat);
+    scene.add(targetHighlight);
+    return targetHighlight;
+}
+
+// Marks whichever cell is currently being written, on any layer — the moving
+// white box that reads as "the operation is happening right here, right now".
+function highlightLayerCell(layerIndex, filterIdx, yy, xx, grow = 1.3) {
+    ensureTargetHighlight();
+    const mesh = layerCubeGrid[layerIndex][filterIdx][yy][xx];
+    targetHighlight.visible = true;
+    targetHighlight.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
+    const p = mesh.geometry.parameters;
+    targetHighlight.scale.set(p.width * grow, p.height * grow, p.depth * grow);
+}
+
+// Same idea as the kernel-to-target rods during Conv, but for ReLU/Pool,
+// which don't have a sliding kernel: a small white box on each *source* cell
+// feeding the current operation, a box on the *target* cell it writes, and a
+// thin gray rod connecting each pair — so it's visible that e.g. ReLU reads
+// one raw cell to write one ReLU cell, and Pool reads four ReLU cells to
+// write one pooled cell.
+let sourceHighlights = [];
+function ensureSourceHighlights(count) {
+    while (sourceHighlights.length < count) {
+        const geo = new THREE.BoxGeometry(1, 1, 1);
+        const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+        const box = new THREE.LineSegments(new THREE.EdgesGeometry(geo), mat);
+        scene.add(box);
+        sourceHighlights.push(box);
+    }
+    for (let i = 0; i < sourceHighlights.length; i++) sourceHighlights[i].visible = i < count;
+    return sourceHighlights;
+}
+
+function linkSourcesToTarget(sourceCells, targetLayerIndex, targetFilterIdx, targetYY, targetXX) {
+    ensureFlowLines(sourceCells.length);
+    ensureSourceHighlights(sourceCells.length);
+    highlightLayerCell(targetLayerIndex, targetFilterIdx, targetYY, targetXX, 1.4);
+    const targetWorld = targetHighlight.position;
+
+    sourceCells.forEach((sc, i) => {
+        const mesh = layerCubeGrid[sc.layerIndex][sc.filterIdx][sc.yy][sc.xx];
+        const world = mesh.getWorldPosition(new THREE.Vector3());
+        const box = sourceHighlights[i];
+        box.visible = true;
+        box.position.copy(world);
+        const p = mesh.geometry.parameters;
+        box.scale.set(p.width * 1.3, p.height * 1.3, p.depth * 1.3);
+
+        const line = flowLines[i];
+        line.visible = true;
+        const pos = line.geometry.attributes.position;
+        pos.setXYZ(0, world.x, world.y, world.z);
+        pos.setXYZ(1, targetWorld.x, targetWorld.y, targetWorld.z);
+        pos.needsUpdate = true;
+    });
+}
+
+// Remembers the last ReLU/Pool source->target link so it can be re-applied
+// every frame regardless of pause — the source/target cells keep moving
+// while a card explodes/collapses, and the highlight must track that live,
+// exactly like positionKernelSlices() already does for the Conv sub-phase.
+let currentLinkSources = null;
+let currentLinkTarget = null;
+function setCurrentLink(sourceCells, targetLayerIndex, targetFilterIdx, targetYY, targetXX) {
+    currentLinkSources = sourceCells;
+    currentLinkTarget = { targetLayerIndex, targetFilterIdx, targetYY, targetXX };
+    linkSourcesToTarget(sourceCells, targetLayerIndex, targetFilterIdx, targetYY, targetXX);
+}
+function refreshCurrentLink() {
+    if (!currentLinkSources || !currentLinkTarget) return;
+    const t = currentLinkTarget;
+    linkSourcesToTarget(currentLinkSources, t.targetLayerIndex, t.targetFilterIdx, t.targetYY, t.targetXX);
+}
+
+function hideKernelAndLinks() {
+    kernelSlices.forEach((s) => { s.visible = false; });
+    flowLines.forEach((l) => { l.visible = false; });
+    sourceHighlights.forEach((b) => { b.visible = false; });
+    if (targetHighlight) targetHighlight.visible = false;
+    currentLinkSources = null;
+    currentLinkTarget = null;
+}
+
+function updateFlowLinks(cfg) {
+    if (kernelSubPhase !== "conv") return;
+    ensureFlowLines(cfg.channels);
+    sourceHighlights.forEach((b) => { b.visible = false; }); // Conv uses the kernel itself as the "source", not boxes
+    for (let c = 0; c < cfg.channels; c++) flowLines[c].visible = true;
+    highlightLayerCell(cfg.rawIndex, kernelFilterIdx, kernelRow, kernelCol);
+    const targetWorld = targetHighlight.position;
+    for (let c = 0; c < cfg.channels; c++) {
+        const srcWorld = kernelSlices[c].getWorldPosition(new THREE.Vector3());
+        const pos = flowLines[c].geometry.attributes.position;
+        pos.setXYZ(0, srcWorld.x, srcWorld.y, srcWorld.z);
+        pos.setXYZ(1, targetWorld.x, targetWorld.y, targetWorld.z);
+        pos.needsUpdate = true;
+    }
+}
+
+// Advance a progressive raster sweep across one filter's target grid, revealing
+// each cell as the front passes it; returns the current position and whether
+// the whole filter's sweep has finished.
+function runSweep(map, duration, revealFn, cfg) {
+    const total = map.w * map.h;
+    const contStep = Math.min(total, (kernelPhaseT / duration) * total);
+    const stepIndex = Math.min(total - 1, Math.floor(contStep));
+    for (let s = sweepLastStep + 1; s <= stepIndex; s++) {
+        revealFn(cfg, kernelFilterIdx, Math.floor(s / map.w), s % map.w);
+    }
+    sweepLastStep = stepIndex;
+    return { done: kernelPhaseT >= duration, row: Math.floor(stepIndex / map.w), col: stepIndex % map.w };
+}
+
+function updateKernelPhase(dt) {
+    const cfg = FLOW_STAGES[kernelStageIdx];
+    kernelPhaseT += dt * flowSpeed;
+
+    if (kernelSubPhase === "conv") {
+        // Real stride-1 sliding scan over the raw conv grid for one filter.
+        const totalRawSteps = cfg.rawW * cfg.rawH;
+        const contStep = Math.min(totalRawSteps, (kernelPhaseT / cfg.convDuration) * totalRawSteps);
+        const stepIndex = Math.min(totalRawSteps - 1, Math.floor(contStep));
+        kernelRow = Math.floor(stepIndex / cfg.rawW);
+        kernelCol = stepIndex % cfg.rawW;
+        kernelCy = kernelRow + 1;
+        kernelCx = kernelCol + 1;
+        kernelSlices.forEach((s) => { s.visible = true; });
+        positionKernelSlices(cfg);
+        // Per-weight colors were already set once in beginFilterConvScan —
+        // the kernel's own weights don't change while it slides, only what
+        // it's overlaying does, so no need to recompute this every frame.
+
+        // Reveal every cell the front has passed (not just the current one),
+        // so no cell is skipped when many steps happen in a single frame.
+        for (let s = lastRevealedRawStep + 1; s <= stepIndex; s++) {
+            revealRawCell(cfg, kernelFilterIdx, Math.floor(s / cfg.rawW), s % cfg.rawW);
+        }
+        lastRevealedRawStep = stepIndex;
+
+        if (kernelPhaseT >= cfg.convDuration) {
+            revealAllRawCells(cfg, kernelFilterIdx);
+            kernelFilterIdx++;
+            kernelPhaseT = 0;
+            if (kernelFilterIdx >= cfg.filterCount) {
+                // All filters' raw conv maps done → begin the ReLU pass.
+                kernelFilterIdx = 0;
+                kernelSubPhase = "relu";
+                sweepLastStep = -1;
+                hideKernelAndLinks();
+                setMathPanelOp("relu", true);
+                resetSpeedForNewOperation();
+            } else {
+                beginFilterConvScan(cfg);
+            }
+        }
+    } else if (kernelSubPhase === "relu") {
+        // ReLU pass sweeps over each raw feature map, one filter at a time —
+        // one raw cell in, one ReLU cell out, so a single source box + rod.
+        const { done, row, col } = runSweep(cfg.postRelu[kernelFilterIdx], cfg.reluDuration, revealReluCell, cfg);
+        setCurrentLink(
+            [{ layerIndex: cfg.rawIndex, filterIdx: kernelFilterIdx, yy: row, xx: col }],
+            cfg.reluIndex, kernelFilterIdx, row, col
+        );
+        if (done) {
+            revealAllReluCells(cfg, kernelFilterIdx);
+            kernelFilterIdx++;
+            kernelPhaseT = 0;
+            sweepLastStep = -1;
+            if (kernelFilterIdx >= cfg.filterCount) {
+                kernelFilterIdx = 0;
+                kernelSubPhase = "pool";
+                setMathPanelOp("pool", true);
+                resetSpeedForNewOperation();
+            }
+        }
+    } else {
+        // Max-pool pass sweeps over each ReLU feature map, one filter at a
+        // time — four ReLU cells (the 2x2 block) feed one pooled cell.
+        const { done, row, col } = runSweep(cfg.pooled[kernelFilterIdx], cfg.poolDuration, revealPoolCell, cfg);
+        setCurrentLink(
+            [
+                { layerIndex: cfg.reluIndex, filterIdx: kernelFilterIdx, yy: row * 2, xx: col * 2 },
+                { layerIndex: cfg.reluIndex, filterIdx: kernelFilterIdx, yy: row * 2, xx: col * 2 + 1 },
+                { layerIndex: cfg.reluIndex, filterIdx: kernelFilterIdx, yy: row * 2 + 1, xx: col * 2 },
+                { layerIndex: cfg.reluIndex, filterIdx: kernelFilterIdx, yy: row * 2 + 1, xx: col * 2 + 1 },
+            ],
+            cfg.pooledIndex, kernelFilterIdx, row, col
+        );
+        if (done) {
+            revealAllPooledCells(cfg, kernelFilterIdx);
+            kernelFilterIdx++;
+            kernelPhaseT = 0;
+            sweepLastStep = -1;
+            if (kernelFilterIdx >= cfg.filterCount) {
+                // This whole conv block is done — advance to the next one.
+                kernelStageIdx++;
+                if (kernelStageIdx < FLOW_STAGES.length) {
+                    attachKernelToStage(FLOW_STAGES[kernelStageIdx]);
+                    resetSpeedForNewOperation();
+                } else {
+                    kernelPhaseActive = false;
+                    hideKernelAndLinks();
+                    startFlattenPhase();
+                    resetSpeedForNewOperation();
+                }
+            }
+        }
+    }
+}
+
+/* ---------- Flatten (Pool2 -> 400) and FC1 dense connections ----------
+   Two more real steps, same idea as Conv/ReLU/Pool: Flatten copies one Pool2
+   cell into the 400-vector at a time (channel by channel, row by row within
+   a channel); then FC1's 400x128 connections are revealed neuron-by-neuron,
+   source 0's 128 links first, then source 1's, and so on. */
+const POOL2_INDEX = 6, FLATTEN_INDEX = 7, FC1_INDEX = 8, FC2_INDEX = 9, ARGMAX_INDEX = 10;
+const FC1_IN = 400, FC1_OUT = 128;
+const FLATTEN_TOTAL_DURATION = 48; // seconds to reveal all 400 cells at 1x (~3s per channel)
+// The connection reveal is deliberately two-speed: the first 5 source
+// neurons crawl by (so the viewer can actually see "1 flatten neuron -> all
+// 128 FC neurons" before the dense mass arrives), then the remaining 395
+// reveal at the normal bulk pace.
+const FC_SLOW_NEURONS = 5;
+const FC_SLOW_DURATION = 30;   // seconds for the first 5 neurons' 640 connections
+const FC_BULK_DURATION = 120;  // seconds for the remaining 395 neurons' 50,560 connections
+const FC_PULSE_COUNT = 14;
+
+let fcPhaseActive = false;
+let fcSubPhase = "flatten"; // "flatten" | "connect"
+let fcPhaseT = 0;
+let flattenStep = 0;
+let lastRevealedFlattenStep = -1;
+let fcLineGeometry = null, fcLineMesh = null;
+let fcPulses = [];
+
+// One Pool2 cell at a time: channel 0's 25 cells (row by row, left to right),
+// then channel 1's, ... up to channel 15 — matching the flatten vector's own
+// channel-major order exactly, one unit cube filled at a time.
+function highlightFlattenCell(step) {
+    ensureTargetHighlight();
+    ensureSourceHighlights(1);
+    ensureFlowLines(1);
+
+    const filterIdx = Math.floor(step / 25);
+    const spatial = step % 25;
+    const row = Math.floor(spatial / 5), col = spatial % 5;
+
+    const srcMesh = layerCubeGrid[POOL2_INDEX][filterIdx][row][col];
+    const srcWorld = srcMesh.getWorldPosition(new THREE.Vector3());
+    sourceHighlights[0].visible = true;
+    sourceHighlights[0].position.copy(srcWorld);
+    const sp = srcMesh.geometry.parameters;
+    sourceHighlights[0].scale.set(sp.width * 1.3, sp.height * 1.3, sp.depth * 1.3);
+
+    const tgtMesh = layerDenseNodes[FLATTEN_INDEX][step];
+    const tgtWorld = tgtMesh.getWorldPosition(new THREE.Vector3());
+    targetHighlight.visible = true;
+    targetHighlight.position.copy(tgtWorld);
+    targetHighlight.scale.set(0.4, 0.4, 0.4);
+
+    flowLines[0].visible = true;
+    const pos = flowLines[0].geometry.attributes.position;
+    pos.setXYZ(0, srcWorld.x, srcWorld.y, srcWorld.z);
+    pos.setXYZ(1, tgtWorld.x, tgtWorld.y, tgtWorld.z);
+    pos.needsUpdate = true;
+}
+
+function revealFlattenCell(step) {
+    const baseColor = new THREE.Color(layerDefs[FLATTEN_INDEX].color);
+    const v = flattenValues[step];
+    const c = baseColor.clone().multiplyScalar(0.3 + v * 0.9);
+    const mesh = layerDenseNodes[FLATTEN_INDEX][step];
+    mesh.material.color.copy(c);
+    mesh.material.emissive.copy(c).multiplyScalar(0.25);
+}
+
+function buildFcConnections() {
+    if (fcLineMesh) { fcLineGeometry.setDrawRange(0, 0); return; }
+    const total = FC1_IN * FC1_OUT;
+    const positions = new Float32Array(total * 2 * 3);
+    const colors = new Float32Array(total * 2 * 3);
+    const tmp = new THREE.Color();
+    // FC1's 128 destination positions don't change per source neuron —
+    // compute them once instead of 400 times (51,200 -> 128 world-position lookups).
+    const dstWorlds = layerDenseNodes[FC1_INDEX].map((m) => m.getWorldPosition(new THREE.Vector3()));
+    let ptr = 0;
+    for (let i = 0; i < FC1_IN; i++) {
+        const srcWorld = layerDenseNodes[FLATTEN_INDEX][i].getWorldPosition(new THREE.Vector3());
+        for (let o = 0; o < FC1_OUT; o++) {
+            const dstWorld = dstWorlds[o];
+            const strength = Math.abs(fc1Weights[i * FC1_OUT + o]);
+            tmp.setRGB(0.62, 0.68, 0.78).multiplyScalar(0.12 + strength * 0.75);
+            positions[ptr] = srcWorld.x; positions[ptr + 1] = srcWorld.y; positions[ptr + 2] = srcWorld.z;
+            colors[ptr] = tmp.r; colors[ptr + 1] = tmp.g; colors[ptr + 2] = tmp.b;
+            ptr += 3;
+            positions[ptr] = dstWorld.x; positions[ptr + 1] = dstWorld.y; positions[ptr + 2] = dstWorld.z;
+            colors[ptr] = tmp.r; colors[ptr + 1] = tmp.g; colors[ptr + 2] = tmp.b;
+            ptr += 3;
+        }
+    }
+    fcLineGeometry = new THREE.BufferGeometry();
+    fcLineGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    fcLineGeometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    fcLineGeometry.setDrawRange(0, 0);
+    const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 });
+    fcLineMesh = new THREE.LineSegments(fcLineGeometry, mat);
+    scene.add(fcLineMesh);
+}
+
+function ensureFcPulses() {
+    if (fcPulses.length) return;
+    for (let i = 0; i < FC_PULSE_COUNT; i++) {
+        const geo = new THREE.SphereGeometry(0.09, 8, 8);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 1 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.visible = false;
+        scene.add(mesh);
+        fcPulses.push({ mesh, connIdx: -1, t: 1 });
+    }
+}
+// A handful of connections (not all 51,200 — that many moving parts would
+// need per-connection state updated every frame) show a traveling yellow dot,
+// standing in for "information is flowing through here right now".
+function updateFcPulses(dt, revealedCount) {
+    if (revealedCount < 1) return;
+    ensureFcPulses();
+    fcPulses.forEach((p) => {
+        p.t += dt * flowSpeed * 0.6;
+        if (p.t >= 1 || p.connIdx < 0) {
+            p.t = 0;
+            p.connIdx = Math.floor(Math.random() * revealedCount);
+            p.mesh.visible = true;
+        }
+        const i = Math.floor(p.connIdx / FC1_OUT), o = p.connIdx % FC1_OUT;
+        const srcWorld = layerDenseNodes[FLATTEN_INDEX][i].getWorldPosition(new THREE.Vector3());
+        const dstWorld = layerDenseNodes[FC1_INDEX][o].getWorldPosition(new THREE.Vector3());
+        p.mesh.position.lerpVectors(srcWorld, dstWorld, p.t);
+    });
+}
+function hideFcPulses() {
+    fcPulses.forEach((p) => { p.mesh.visible = false; });
+}
+
+function startFlattenPhase() {
+    fcPhaseActive = true;
+    fcSubPhase = "flatten";
+    fcPhaseT = 0;
+    flattenStep = 0;
+    lastRevealedFlattenStep = -1;
+    setMathPanelOp("flatten", true);
+}
+
+function updateFcPhase(dt) {
+    if (fcSubPhase === "flatten") {
+        fcPhaseT += dt * flowSpeed;
+        const total = 400;
+        const contStep = Math.min(total, (fcPhaseT / FLATTEN_TOTAL_DURATION) * total);
+        const stepIndex = Math.min(total - 1, Math.floor(contStep));
+        flattenStep = stepIndex;
+        highlightFlattenCell(stepIndex);
+        // Reveal every cell the front has passed, not just the current one,
+        // so nothing gets skipped if several steps land in one frame.
+        for (let s = lastRevealedFlattenStep + 1; s <= stepIndex; s++) revealFlattenCell(s);
+        lastRevealedFlattenStep = stepIndex;
+
+        if (fcPhaseT >= FLATTEN_TOTAL_DURATION) {
+            fcSubPhase = "connect";
+            fcPhaseT = 0; // was left over from the flatten phase — starting "connect" without
+                          // resetting this instantly revealed a chunk of connections (bug).
+            hideKernelAndLinks();
+            buildFcConnections();
+            setMathPanelOp("fc", true);
+            resetSpeedForNewOperation();
+        }
+    } else {
+        fcPhaseT += dt * flowSpeed;
+        const slowConns = FC_SLOW_NEURONS * FC1_OUT;
+        const bulkConns = (FC1_IN - FC_SLOW_NEURONS) * FC1_OUT;
+        const totalDuration = FC_SLOW_DURATION + FC_BULK_DURATION;
+        let revealed;
+        if (fcPhaseT < FC_SLOW_DURATION) {
+            revealed = Math.floor((fcPhaseT / FC_SLOW_DURATION) * slowConns);
+        } else {
+            const bulkT = Math.min(fcPhaseT - FC_SLOW_DURATION, FC_BULK_DURATION);
+            revealed = slowConns + Math.floor((bulkT / FC_BULK_DURATION) * bulkConns);
+        }
+        if (fcLineGeometry) fcLineGeometry.setDrawRange(0, revealed * 2);
+        updateFcPulses(dt, revealed);
+        if (fcPhaseT >= totalDuration) {
+            fcPhaseActive = false;
+            hideFcPulses();
+            startFc2Phase();
+        }
+    }
+}
+
+/* ---------- FC2 connections (128 -> 10) and ArgMax ----------
+   Same technique as FC1's connections (one merged geometry, progressive
+   drawRange reveal, illustrative-weight brightness, a few traveling pulses)
+   but tinted red instead of gray-blue so it reads as a different, later step.
+   ArgMax itself does no weighted math — it just picks the largest of the 10
+   FC2 scores, so its "animation" is a single highlight + the winning digit. */
+const FC2_IN = 128, FC2_OUT = 10;
+// Same two-speed idea as FC1: the first 5 source neurons crawl by so the
+// viewer sees "1 neuron -> all 10 FC2 outputs" clearly, then the rest reveal
+// at a faster bulk pace.
+const FC2_SLOW_NEURONS = 5;
+const FC2_SLOW_DURATION = 20;  // seconds for the first 5 neurons' 50 connections
+const FC2_BULK_DURATION = 25;  // seconds for the remaining 123 neurons' 1,230 connections
+const FC2_PULSE_COUNT = 8;
+const ARGMAX_HOLD_DURATION = 4;  // seconds the winner highlight stays before this run is "done"
+
+let fc2PhaseActive = false;
+let fc2SubPhase = "connect"; // "connect" | "argmax"
+let fc2PhaseT = 0;
+let fc2LineGeometry = null, fc2LineMesh = null;
+let fc2Pulses = [];
+
+function buildFc2Connections() {
+    if (fc2LineMesh) { fc2LineGeometry.setDrawRange(0, 0); return; }
+    const total = FC2_IN * FC2_OUT;
+    const positions = new Float32Array(total * 2 * 3);
+    const colors = new Float32Array(total * 2 * 3);
+    const tmp = new THREE.Color();
+    const dstWorlds = layerDenseNodes[FC2_INDEX].map((m) => m.getWorldPosition(new THREE.Vector3()));
+    let ptr = 0;
+    for (let i = 0; i < FC2_IN; i++) {
+        const srcWorld = layerDenseNodes[FC1_INDEX][i].getWorldPosition(new THREE.Vector3());
+        for (let o = 0; o < FC2_OUT; o++) {
+            const dstWorld = dstWorlds[o];
+            const strength = Math.abs(fc2Weights[i * FC2_OUT + o]);
+            tmp.setRGB(0.86, 0.42, 0.4).multiplyScalar(0.15 + strength * 0.75);
+            positions[ptr] = srcWorld.x; positions[ptr + 1] = srcWorld.y; positions[ptr + 2] = srcWorld.z;
+            colors[ptr] = tmp.r; colors[ptr + 1] = tmp.g; colors[ptr + 2] = tmp.b;
+            ptr += 3;
+            positions[ptr] = dstWorld.x; positions[ptr + 1] = dstWorld.y; positions[ptr + 2] = dstWorld.z;
+            colors[ptr] = tmp.r; colors[ptr + 1] = tmp.g; colors[ptr + 2] = tmp.b;
+            ptr += 3;
+        }
+    }
+    fc2LineGeometry = new THREE.BufferGeometry();
+    fc2LineGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    fc2LineGeometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    fc2LineGeometry.setDrawRange(0, 0);
+    const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6 });
+    fc2LineMesh = new THREE.LineSegments(fc2LineGeometry, mat);
+    scene.add(fc2LineMesh);
+}
+
+function ensureFc2Pulses() {
+    if (fc2Pulses.length) return;
+    for (let i = 0; i < FC2_PULSE_COUNT; i++) {
+        const geo = new THREE.SphereGeometry(0.08, 8, 8);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xf87171, emissive: 0xf87171, emissiveIntensity: 1 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.visible = false;
+        scene.add(mesh);
+        fc2Pulses.push({ mesh, connIdx: -1, t: 1 });
+    }
+}
+function updateFc2Pulses(dt, revealedCount) {
+    if (revealedCount < 1) return;
+    ensureFc2Pulses();
+    fc2Pulses.forEach((p) => {
+        p.t += dt * flowSpeed * 0.6;
+        if (p.t >= 1 || p.connIdx < 0) {
+            p.t = 0;
+            p.connIdx = Math.floor(Math.random() * revealedCount);
+            p.mesh.visible = true;
+        }
+        const i = Math.floor(p.connIdx / FC2_OUT), o = p.connIdx % FC2_OUT;
+        const srcWorld = layerDenseNodes[FC1_INDEX][i].getWorldPosition(new THREE.Vector3());
+        const dstWorld = layerDenseNodes[FC2_INDEX][o].getWorldPosition(new THREE.Vector3());
+        p.mesh.position.lerpVectors(srcWorld, dstWorld, p.t);
+    });
+}
+function hideFc2Pulses() {
+    fc2Pulses.forEach((p) => { p.mesh.visible = false; });
+}
+
+function revealArgmax() {
+    // Color all 10 FC2 spheres by their real (illustrative) score first...
+    const maxAbsScore = Math.max(1e-6, ...Array.from(fc2Scores).map((v) => Math.abs(v)));
+    const fc2Base = new THREE.Color(layerDefs[FC2_INDEX].color);
+    for (let o = 0; o < 10; o++) {
+        const t = Math.max(0, fc2Scores[o]) / maxAbsScore;
+        const c = fc2Base.clone().multiplyScalar(0.3 + t * 0.8);
+        const mesh = layerDenseNodes[FC2_INDEX][o];
+        mesh.material.color.copy(c);
+        mesh.material.emissive.copy(c).multiplyScalar(0.25);
+    }
+    // ...then make the actual winner glow, and connect it to ArgMax's node.
+    const winnerColor = new THREE.Color(0xfacc15);
+    const winnerMesh = layerDenseNodes[FC2_INDEX][argmaxDigit];
+    winnerMesh.material.color.copy(winnerColor);
+    winnerMesh.material.emissive.copy(winnerColor).multiplyScalar(0.6);
+
+    const argmaxGroup = layerGroups[ARGMAX_INDEX];
+    updateSpriteText(argmaxGroup.userData.argmaxLabel, String(argmaxDigit), "#facc15");
+    argmaxGroup.userData.argmaxSphere.material.color.copy(winnerColor);
+    argmaxGroup.userData.argmaxSphere.material.emissive.copy(winnerColor).multiplyScalar(0.5);
+
+    ensureTargetHighlight();
+    ensureSourceHighlights(1);
+    ensureFlowLines(1);
+    const srcWorld = winnerMesh.getWorldPosition(new THREE.Vector3());
+    sourceHighlights[0].visible = true;
+    sourceHighlights[0].position.copy(srcWorld);
+    sourceHighlights[0].scale.set(0.5, 0.5, 0.5);
+    const tgtWorld = argmaxGroup.userData.argmaxSphere.getWorldPosition(new THREE.Vector3());
+    targetHighlight.visible = true;
+    targetHighlight.position.copy(tgtWorld);
+    targetHighlight.scale.set(0.9, 0.9, 0.9);
+    flowLines[0].visible = true;
+    const pos = flowLines[0].geometry.attributes.position;
+    pos.setXYZ(0, srcWorld.x, srcWorld.y, srcWorld.z);
+    pos.setXYZ(1, tgtWorld.x, tgtWorld.y, tgtWorld.z);
+    pos.needsUpdate = true;
+}
+
+function startFc2Phase() {
+    fc2PhaseActive = true;
+    fc2SubPhase = "connect";
+    fc2PhaseT = 0;
+    buildFc2Connections();
+    setMathPanelOp("fc", true);
+    resetSpeedForNewOperation();
+}
+
+function updateFc2Phase(dt) {
+    fc2PhaseT += dt * flowSpeed;
+    if (fc2SubPhase === "connect") {
+        const slowConns = FC2_SLOW_NEURONS * FC2_OUT;
+        const bulkConns = (FC2_IN - FC2_SLOW_NEURONS) * FC2_OUT;
+        const totalDuration = FC2_SLOW_DURATION + FC2_BULK_DURATION;
+        let revealed;
+        if (fc2PhaseT < FC2_SLOW_DURATION) {
+            revealed = Math.floor((fc2PhaseT / FC2_SLOW_DURATION) * slowConns);
+        } else {
+            const bulkT = Math.min(fc2PhaseT - FC2_SLOW_DURATION, FC2_BULK_DURATION);
+            revealed = slowConns + Math.floor((bulkT / FC2_BULK_DURATION) * bulkConns);
+        }
+        if (fc2LineGeometry) fc2LineGeometry.setDrawRange(0, revealed * 2);
+        updateFc2Pulses(dt, revealed);
+        if (fc2PhaseT >= totalDuration) {
+            fc2SubPhase = "argmax";
+            fc2PhaseT = 0;
+            hideFc2Pulses();
+            revealArgmax();
+            setMathPanelOp("argmax", true);
+            resetSpeedForNewOperation();
+        }
+    } else if (fc2PhaseT >= ARGMAX_HOLD_DURATION) {
+        fc2PhaseActive = false;
+    }
+}
+
+function setRunningControlsEnabled(enabled) {
+    pauseBtn.disabled = !enabled;
+    restartBtn.disabled = !enabled;
+}
+
+function resetFeatureMapColors() {
+    [1, 2, 3, 4, 5, 6].forEach((layerIndex) => {
+        layerFilterBaseColor[layerIndex].forEach((baseColor, filterIdx) => {
+            const grid = layerCubeGrid[layerIndex][filterIdx];
+            grid.forEach((row) => {
+                row.forEach((mesh) => {
+                    mesh.material.color.copy(baseColor);
+                    mesh.material.emissive.set(0, 0, 0);
+                });
+            });
+        });
+    });
+    if (layerDenseNodes[FLATTEN_INDEX]) {
+        const flatColor = new THREE.Color(layerDefs[FLATTEN_INDEX].color);
+        layerDenseNodes[FLATTEN_INDEX].forEach((mesh) => {
+            mesh.material.color.copy(flatColor);
+            mesh.material.emissive.set(0, 0, 0);
+        });
+    }
+    if (fcLineGeometry) fcLineGeometry.setDrawRange(0, 0);
+    if (layerDenseNodes[FC2_INDEX]) {
+        const fc2Color = new THREE.Color(layerDefs[FC2_INDEX].color);
+        layerDenseNodes[FC2_INDEX].forEach((mesh) => {
+            mesh.material.color.copy(fc2Color);
+            mesh.material.emissive.set(0, 0, 0);
+        });
+    }
+    if (fc2LineGeometry) fc2LineGeometry.setDrawRange(0, 0);
+    const argmaxGroup = layerGroups[ARGMAX_INDEX];
+    if (argmaxGroup) {
+        const argmaxColor = new THREE.Color(layerDefs[ARGMAX_INDEX].color);
+        argmaxGroup.userData.argmaxSphere.material.color.copy(argmaxColor);
+        argmaxGroup.userData.argmaxSphere.material.emissive.set(0, 0, 0);
+        updateSpriteText(argmaxGroup.userData.argmaxLabel, "?", "#f8fafc");
+    }
+}
+
+function resetFlow() {
+    kernelPhaseActive = false;
+    flowPaused = false;
+    kernelStageIdx = 0;
+    kernelFilterIdx = 0;
+    kernelSubPhase = "conv";
+    kernelPhaseT = 0;
+    lastRevealedRawStep = -1;
+    sweepLastStep = -1;
+    fcPhaseActive = false;
+    fcSubPhase = "flatten";
+    fcPhaseT = 0;
+    flattenStep = 0;
+    lastRevealedFlattenStep = -1;
+    hideFcPulses();
+    fc2PhaseActive = false;
+    fc2SubPhase = "connect";
+    fc2PhaseT = 0;
+    hideFc2Pulses();
+    hideKernelAndLinks();
+    playBtn.textContent = "▶ Play Data Flow";
+    pauseBtn.textContent = "⏸";
+    setRunningControlsEnabled(false);
+    resetFeatureMapColors();
+    setMathPanelOp("conv", true);
+}
+
+function startFlow() {
+    if (kernelPhaseActive || fcPhaseActive || fc2PhaseActive || !FLOW_STAGES.length) return;
+    resetFeatureMapColors(); // every fresh run starts from blank feature maps, even after a natural finish
+    kernelPhaseActive = true;
+    kernelStageIdx = 0;
+    kernelFilterIdx = 0;
+    flowPaused = false;
+    playBtn.textContent = "⏸ Flowing…";
+    pauseBtn.textContent = "⏸";
+    setRunningControlsEnabled(true);
+    attachKernelToStage(FLOW_STAGES[0]);
+    updateKernelPhase(0); // place the kernel at its starting position immediately, even before the first tick
+}
+
+playBtn.addEventListener("click", startFlow);
+pauseBtn.addEventListener("click", () => {
+    if (!kernelPhaseActive && !fcPhaseActive && !fc2PhaseActive) return;
+    flowPaused = !flowPaused;
+    pauseBtn.textContent = flowPaused ? "▶" : "⏸";
+});
+restartBtn.addEventListener("click", () => {
+    resetFlow();
+    startFlow();
+    // Restart returns to the very beginning but waits for the user to
+    // press resume, instead of immediately racing off again.
+    flowPaused = true;
+    pauseBtn.textContent = "▶";
+});
+
+/* ---------- render loop ---------- */
+function resize() {
+    const w = wrap3d.clientWidth, h = wrap3d.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / Math.max(h, 1);
+    camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(wrap3d);
+resize();
+
+/* ---------- collapsed <-> exploded-per-filter transition ---------- */
+const EXPAND_SPEED = 1.1;   // progress units per second
+const STAGGER = 0.6;        // fraction of the transition spent staggering filter start times
+
+function updateStackAnimations(dt) {
+    Object.values(stackAnimState).forEach((state) => {
+        if (state.progress < state.target) {
+            state.progress = Math.min(state.target, state.progress + dt * EXPAND_SPEED);
+        } else if (state.progress > state.target) {
+            state.progress = Math.max(state.target, state.progress - dt * EXPAND_SPEED);
+        }
+        const gp = state.progress;
+        state.items.forEach((item) => {
+            const start = (item.filterIndex / state.filterCount) * STAGGER;
+            const local = Math.min(1, Math.max(0, (gp - start) / (1 - STAGGER)));
+            const eased = easeInOutCubic(local);
+            item.mesh.position.lerpVectors(item.collapsed, item.expanded, eased);
+            if (item.kind === "label") {
+                item.mesh.visible = eased > 0.001;
+                item.mesh.material.opacity = eased;
+            }
+        });
+    });
+}
+
+const clock = new THREE.Clock();
+let mathPanelRefreshT = 0;
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+
+    updateStackAnimations(dt);
+    updateGroupBoundingBoxes();
+    updateTpFilterAnimations(dt);
+
+    // Throttled — rebuilding the panel's HTML every single frame would be
+    // wasted work; ~6-7 updates/sec is still plenty smooth for reading numbers.
+    mathPanelRefreshT += dt;
+    if (mathPanelRefreshT > 0.15) {
+        mathPanelRefreshT = 0;
+        renderMathPanel();
+    }
+
+    if (kernelPhaseActive) {
+        // During the conv sub-phase keep the kernel glued to its source
+        // cell's live position even while paused (cards may be exploding);
+        // ReLU/Pool passes have no kernel to follow.
+        if (kernelSubPhase === "conv") positionKernelSlices(FLOW_STAGES[kernelStageIdx]);
+        else refreshCurrentLink();
+        if (!flowPaused) updateKernelPhase(dt);
+    }
+
+    if (fcPhaseActive) {
+        // Same live-tracking rule as the conv kernel: while paused, keep the
+        // Flatten highlight glued to its (possibly exploding/collapsing) cells.
+        if (fcSubPhase === "flatten") highlightFlattenCell(flattenStep);
+        if (!flowPaused) updateFcPhase(dt);
+    }
+
+    if (fc2PhaseActive) {
+        if (!flowPaused) updateFc2Phase(dt);
+        if (!fc2PhaseActive) {
+            // Finished naturally (ArgMax hold ran out) — same end-of-run reset
+            // the kernel/flatten phases do.
+            playBtn.textContent = "▶ Play Data Flow";
+            pauseBtn.textContent = "⏸";
+            setRunningControlsEnabled(false);
+        }
+    }
+
+    controls.update();
+    renderer.render(scene, camera);
+
+    tpControls.update();
+    tpRenderer.render(tpScene, tpCamera);
+}
+animate();
+</script>
+</body>
+</html>

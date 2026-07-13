@@ -77,6 +77,9 @@ class Lab(Base):
     keywords: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     features: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Self-hosted prerequisite/orientation reading (frontend/public/guides/) -
+    # not a link to an external site. None means this lab has no guide yet.
+    guide_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     reservations: Mapped[list["Reservation"]] = relationship(back_populates="lab")
 

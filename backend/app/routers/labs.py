@@ -29,6 +29,7 @@ def _to_out(db: Session, lab: Lab, queue_count: int) -> LabOut:
         features=lab.features,
         is_public=lab.is_public,
         next_available_at=available_at.replace(tzinfo=timezone.utc) if available_at is not None else None,
+        guide_url=lab.guide_url,
     )
 
 

@@ -206,6 +206,13 @@ export default function LabsPage() {
                     Reserve for later
                   </Button>
                 )}
+                {lab.guide_url && (
+                  <Button size="sm" variant="outline" className="w-full" asChild>
+                    <a href={lab.guide_url} target="_blank" rel="noopener noreferrer">
+                      Go to Guide
+                    </a>
+                  </Button>
+                )}
               </div>
 
               {schedulingLabId === lab.id && (

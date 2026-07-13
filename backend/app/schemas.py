@@ -83,6 +83,7 @@ class LabOut(BaseModel):
     # session could start without overlapping an existing reservation -
     # see services/availability.py::next_available_at.
     next_available_at: datetime | None
+    guide_url: str | None
 
     model_config = {"from_attributes": True}
 
@@ -95,6 +96,7 @@ class LabCreate(BaseModel):
     keywords: list[str] | None = None
     features: list[str] | None = None
     is_public: bool = False
+    guide_url: str | None = None
 
 
 class LabAccessOut(BaseModel):
