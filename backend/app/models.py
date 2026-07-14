@@ -45,7 +45,16 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     reservations: Mapped[list["Reservation"]] = relationship(back_populates="user")
-    profile: Mapped["UserProfile | None"] = relationship(back_populates="user", uselist=False)
+    # passive_deletes=True: user_profiles.user_id already has ON DELETE
+    # CASCADE at the DB level - without this, SQLAlchemy's ORM doesn't
+    # trust that and instead tries to UPDATE the child's FK to NULL
+    # before deleting the user, which fails outright since that column
+    # is NOT NULL (this actually happened deleting a real account with a
+    # filled-in profile). This tells the ORM to just issue the DELETE and
+    # let Postgres cascade it, matching what the FK already promises.
+    profile: Mapped["UserProfile | None"] = relationship(
+        back_populates="user", uselist=False, passive_deletes=True
+    )
 
     __table_args__ = (
         Index("ix_users_username_lower", func.lower(username), unique=True),

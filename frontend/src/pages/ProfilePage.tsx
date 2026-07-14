@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import PasswordInput from "../components/PasswordInput";
 import * as api from "../api/client";
 import { Profile } from "../api/types";
 import { useAuth } from "../context/AuthContext";
@@ -367,32 +368,30 @@ export default function ProfilePage() {
             This permanently deletes your account, profile, and all reservation history. Enter your password
             to confirm.
           </p>
-          <div className="mt-4 space-y-2">
-            <Label htmlFor="delete-password">Password</Label>
-            <Input
-              id="delete-password"
-              type="password"
-              value={deletePassword}
-              autoComplete="current-password"
-              onChange={(e) => setDeletePassword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleDeleteAccount();
-              }}
-            />
-          </div>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button type="button" variant="secondary" disabled={deleting} onClick={() => setDeleteOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deleting || !deletePassword}
-              onClick={handleDeleteAccount}
-            >
-              {deleting ? "Deleting…" : "Delete account"}
-            </Button>
-          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleDeleteAccount();
+            }}
+          >
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="delete-password">Password</Label>
+              <PasswordInput
+                id="delete-password"
+                value={deletePassword}
+                onChange={setDeletePassword}
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button type="button" variant="secondary" disabled={deleting} onClick={() => setDeleteOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="destructive" disabled={deleting || !deletePassword}>
+                {deleting ? "Deleting…" : "Delete account"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
