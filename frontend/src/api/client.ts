@@ -96,8 +96,6 @@ export const getMe = () => get<User>("/api/auth/me");
 // --- labs ---
 
 export const getLabs = () => get<Lab[]>("/api/labs");
-export const createLab = (name: string, description: string) =>
-  post<Lab>("/api/labs", { name, description });
 export const accessLab = (id: number) => get<LabAccess>(`/api/labs/${id}/access`);
 
 // --- reservations ---

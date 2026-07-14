@@ -2,12 +2,11 @@ import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import * as api from "../api/client";
 import { Lab, LabStatus } from "../api/types";
-import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { openLabWindow } from "../lib/labWindow";
 
@@ -61,7 +60,6 @@ function formatAvailability(nextAvailableAt: string | null, nowMs: number): stri
 }
 
 export default function LabsPage() {
-  const { user } = useAuth();
   const { showError } = useToast();
   const navigate = useNavigate();
   const [labs, setLabs] = useState<Lab[]>([]);
@@ -70,9 +68,6 @@ export default function LabsPage() {
   const { date: defaultDate, time: defaultTime } = defaultReservationDateTime();
   const [reservationDate, setReservationDate] = useState(defaultDate);
   const [reservationTime, setReservationTime] = useState(defaultTime);
-
-  const [newLabName, setNewLabName] = useState("");
-  const [newLabDescription, setNewLabDescription] = useState("");
   const [now, setNow] = useState(() => Date.now());
 
   async function refresh() {
@@ -133,18 +128,6 @@ export default function LabsPage() {
       showError(err instanceof api.ApiError ? err.message : "Failed to reserve");
     } finally {
       setBusyLabId(null);
-    }
-  }
-
-  async function handleCreateLab(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await api.createLab(newLabName, newLabDescription);
-      setNewLabName("");
-      setNewLabDescription("");
-      await refresh();
-    } catch (err) {
-      showError(err instanceof api.ApiError ? err.message : "Failed to create lab");
     }
   }
 
@@ -287,32 +270,6 @@ export default function LabsPage() {
         ))}
       </div>
 
-      {user?.role === "admin" && (
-        <Card className="mt-10">
-          <CardHeader>
-            <CardTitle className="text-lg">Add a lab (admin)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreateLab} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="newLabName">Name</Label>
-                <Input id="newLabName" value={newLabName} onChange={(e) => setNewLabName(e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="newLabDescription">Description</Label>
-                <textarea
-                  id="newLabDescription"
-                  value={newLabDescription}
-                  onChange={(e) => setNewLabDescription(e.target.value)}
-                  required
-                  className="flex min-h-20 w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </div>
-              <Button type="submit">Create lab</Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
