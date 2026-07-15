@@ -18,5 +18,17 @@ export const partners: Partner[] = [
     logo: "/bonn-logo.png",
     logoClassName: "h-20 w-auto",
   },
-  // Add your institution's entry below this line. Do not remove the entry above.
+  {
+    name: "Universidad Nacional de San Luis",
+    url: "https://www.unsl.edu.ar",
+    logo: "/unsl-logo.png",
+    logoClassName: "h-14 w-auto",
+  },
+  {
+    name: "BodyFormer",
+    url: "https://bodyformer.app",
+    logo: "/bodyformer-logo.png",
+    logoClassName: "h-14 w-auto",
+  },
+  // Add your institution's entry below this line. Do not remove the entries above.
 ];

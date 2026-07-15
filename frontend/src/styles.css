@@ -85,3 +85,33 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 }
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@layer utilities {
+  .partners-marquee-track {
+    animation: marquee 28s linear infinite;
+  }
+
+  .partners-marquee-track:hover {
+    animation-play-state: paused;
+  }
+
+  .partners-marquee-mask {
+    mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .partners-marquee-track {
+      animation: none;
+    }
+  }
+}

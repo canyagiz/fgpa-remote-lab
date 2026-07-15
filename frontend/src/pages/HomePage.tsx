@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import HeroVideo from "../components/HeroVideo";
+import PartnersMarquee from "../components/PartnersMarquee";
 import { useAuth } from "../context/AuthContext";
-import { partners } from "../config/partners";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -29,18 +29,7 @@ export default function HomePage() {
 
         {/* LICENSE (Branding & Attribution Requirement, item 2): entries here
             are additive only - see src/config/partners.ts. */}
-        <div className="mt-16 flex flex-wrap items-center justify-center gap-5">
-          <span className="text-base uppercase tracking-wide text-muted-foreground">In partnership with</span>
-          {partners.map((partner) => (
-            <a key={partner.name} href={partner.url} target="_blank" rel="noopener noreferrer">
-              <img
-                src={partner.logo}
-                alt={partner.name}
-                className={partner.logoClassName ?? "h-20 w-auto"}
-              />
-            </a>
-          ))}
-        </div>
+        <PartnersMarquee />
       </section>
 
       {/* Placeholder content - to be replaced once the hardware-access
