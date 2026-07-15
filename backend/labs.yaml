@@ -27,7 +27,7 @@ labs:
     backend_url: "http://10.30.70.23:5001"
     keywords: ["fpga", "electronics", "image processing", "cyclone4"]
     features: ["feature1", "feature2"]
-    is_public: false
+    is_public: true
 
   - id: 3
     name: "Cyclone V Lab"
