@@ -43,6 +43,13 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.user)
     two_factor_enabled: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Regenerated on every successful login (see routers/auth.py) and
+    # copied into that browser's session cookie. get_current_user compares
+    # the two on every request - a second login from another device
+    # overwrites this column, which silently invalidates the first
+    # device's cookie on its very next request. Single-active-session-
+    # per-account, enforced without a separate sessions table.
+    active_session_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     reservations: Mapped[list["Reservation"]] = relationship(back_populates="user")
     # passive_deletes=True: user_profiles.user_id already has ON DELETE
