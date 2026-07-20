@@ -24,8 +24,10 @@ export default function AuthDialog() {
           <RegisterForm
             onSwitchToLogin={openLogin}
             onSuccess={() => {
+              // Verifying the emailed code now finishes registration
+              // fully signed in, same as LoginForm's 2FA step above.
               close();
-              navigate("/");
+              navigate("/dashboard");
             }}
           />
         )}

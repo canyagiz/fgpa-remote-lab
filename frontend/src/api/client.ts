@@ -83,7 +83,7 @@ export const register = (data: {
   captcha_answer: number;
   csrf_token: string;
   website?: string;
-}) => post<MessageResponse>("/api/auth/register", { website: "", ...data });
+}) => post<LoginResult>("/api/auth/register", { website: "", ...data });
 
 export const login = (username: string, password: string) =>
   post<LoginResult>("/api/auth/login", { username, password });

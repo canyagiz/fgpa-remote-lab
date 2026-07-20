@@ -53,14 +53,14 @@ def get_csrf_token(request: Request):
     return {"success": True, "token": token}
 
 
-@router.post("/register", response_model=MessageOut)
+@router.post("/register", response_model=LoginResult)
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     # Honeypot: bots fill every field, including this hidden one. Report
     # fake success so the bot doesn't learn its submission was rejected.
     # Not rate-limited - it's a guaranteed instant fake success, nothing
     # here for an attacker to probe or brute-force.
     if payload.website:
-        return MessageOut(success=True, message="Registration successful")
+        return LoginResult(success=True, require_2fa=True, message="Registration successful")
 
     # Rate-limited from here on, BEFORE csrf/captcha/content validation -
     # all of those used to run first, so a submission that merely had a
@@ -150,7 +150,24 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username or email already exists")
 
-    return MessageOut(success=True, message="Registration successful")
+    # Verify the email address right away, the way most sites do it -
+    # not deferred until whatever this person's first login happens to
+    # be. two_factor_enabled defaults to True for every new account (see
+    # models.py), so this always fires. verify-2fa/resend-2fa below don't
+    # need to change for this - both already key off pending_2fa_user_id
+    # in the session, whether login() set it or this did.
+    code = generate_two_factor_code()
+    expires_at = datetime.utcnow() + timedelta(seconds=settings.two_factor_code_ttl_seconds)
+    db.add(TwoFactorCode(user_id=user.id, code=code, expires_at=expires_at))
+    db.commit()
+    send_two_factor_code(user.email, user.username, code)
+
+    request.session["pending_2fa_user_id"] = user.id
+    return LoginResult(
+        success=True,
+        require_2fa=True,
+        message=f"A verification code has been sent to {mask_email(user.email)}",
+    )
 
 
 @router.post("/login", response_model=LoginResult)

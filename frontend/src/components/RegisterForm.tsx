@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, getCaptcha, getCsrfToken, register } from "../api/client";
 import { CaptchaResponse } from "../api/types";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import PasswordInput from "./PasswordInput";
 import PasswordStrength from "./PasswordStrength";
@@ -12,12 +13,13 @@ import PuzzleCaptcha from "./PuzzleCaptcha";
 
 interface RegisterFormProps {
   onSwitchToLogin: () => void;
-  /** Called once the post-registration countdown finishes - closes the modal. */
+  /** Called once the post-registration email code has been verified. */
   onSuccess: () => void;
 }
 
 export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFormProps) {
-  const { showError } = useToast();
+  const { verify2FA, resend2FA } = useAuth();
+  const { showError, showSuccess } = useToast();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,18 +32,14 @@ export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFor
   const [website, setWebsite] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [countdown, setCountdown] = useState(3);
 
-  useEffect(() => {
-    if (!success) return;
-    if (countdown <= 0) {
-      onSuccess();
-      return;
-    }
-    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [success, countdown, onSuccess]);
+  // Registration always ends with require_2fa (every new account starts
+  // with two_factor_enabled=True - see backend/app/models.py), so the
+  // email code step below happens right after signup, not deferred to
+  // whatever this person's first sign-in happens to be.
+  const [awaitingCode, setAwaitingCode] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState("");
+  const [code, setCode] = useState("");
 
   async function loadCaptchaAndCsrf() {
     // Sequential on purpose: both endpoints mutate the session cookie
@@ -78,7 +76,7 @@ export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFor
 
     setSubmitting(true);
     try {
-      await register({
+      const result = await register({
         username,
         email,
         password,
@@ -86,7 +84,8 @@ export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFor
         csrf_token: csrfToken,
         website,
       });
-      setSuccess(true);
+      setVerificationMessage(result.message ?? "We sent a verification code to your email.");
+      setAwaitingCode(true);
     } catch (err) {
       showError(err instanceof ApiError ? err.message : "Registration failed");
       await loadCaptchaAndCsrf();
@@ -95,16 +94,57 @@ export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFor
     }
   }
 
-  if (success) {
+  async function handleVerify(e: FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await verify2FA(code);
+      onSuccess();
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : "Verification failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResend() {
+    try {
+      await resend2FA();
+      showSuccess("A new code has been sent.");
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : "Failed to resend code");
+    }
+  }
+
+  if (awaitingCode) {
     return (
       <>
         <CardHeader className="p-0">
-          <CardTitle className="text-2xl">Registration successful</CardTitle>
+          <CardTitle className="text-2xl">Verify your email</CardTitle>
+          <p className="text-sm text-muted-foreground">{verificationMessage}</p>
         </CardHeader>
         <CardContent className="p-0">
-          <p className="text-sm text-muted-foreground">
-            Redirecting to the main menu in {countdown}...
-          </p>
+          <form onSubmit={handleVerify} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="code">Code</Label>
+              <Input
+                id="code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                maxLength={6}
+                inputMode="numeric"
+                autoFocus
+                required
+                className="text-center text-2xl tracking-[0.5em]"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={submitting}>
+              Verify
+            </Button>
+          </form>
+          <Button variant="link" className="mt-3 h-auto p-0" onClick={handleResend}>
+            Resend code
+          </Button>
         </CardContent>
       </>
     );
