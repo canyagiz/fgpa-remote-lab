@@ -1,8 +1,6 @@
 def register(client, username, email, password="Password123"):
     csrf = client.get("/api/auth/csrf-token").json()["token"]
-    question = client.get("/api/auth/captcha").json()["question"]
-    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
-    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+    answer = client.get("/api/auth/captcha").json()["target_x"]
 
     response = client.post(
         "/api/auth/register",

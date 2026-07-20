@@ -16,7 +16,12 @@ class MessageOut(BaseModel):
 
 class CaptchaOut(BaseModel):
     success: bool = True
-    question: str
+    # Puzzle-slider geometry (see routers/auth.py and
+    # components/PuzzleCaptcha.tsx): target_x is the piece's correct
+    # drop position within a track track_width px wide.
+    track_width: int
+    piece_size: int
+    target_x: int
 
 
 class RegisterRequest(BaseModel):

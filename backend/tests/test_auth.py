@@ -104,9 +104,7 @@ def test_registration_rate_limit_reports_how_long_to_wait(client):
         register(client, f"ratelimit{i}", f"ratelimit{i}@example.com")
 
     csrf = client.get("/api/auth/csrf-token").json()["token"]
-    question = client.get("/api/auth/captcha").json()["question"]
-    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
-    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+    answer = client.get("/api/auth/captcha").json()["target_x"]
 
     response = client.post(
         "/api/auth/register",
@@ -128,9 +126,7 @@ def _attempt_register_with_weak_password(client, username):
     """A submission that fails content validation (weak password) - used
     to confirm this still consumes a rate-limit slot, unlike before."""
     csrf = client.get("/api/auth/csrf-token").json()["token"]
-    question = client.get("/api/auth/captcha").json()["question"]
-    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
-    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+    answer = client.get("/api/auth/captcha").json()["target_x"]
     return client.post(
         "/api/auth/register",
         json={
@@ -198,9 +194,7 @@ def test_registration_username_is_case_insensitively_unique(client):
     register(client, "alice", "alice@example.com")
 
     csrf = client.get("/api/auth/csrf-token").json()["token"]
-    question = client.get("/api/auth/captcha").json()["question"]
-    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
-    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+    answer = client.get("/api/auth/captcha").json()["target_x"]
 
     response = client.post(
         "/api/auth/register",
@@ -220,9 +214,7 @@ def test_registration_email_is_case_insensitively_unique(client):
     register(client, "alice", "alice@example.com")
 
     csrf = client.get("/api/auth/csrf-token").json()["token"]
-    question = client.get("/api/auth/captcha").json()["question"]
-    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
-    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+    answer = client.get("/api/auth/captcha").json()["target_x"]
 
     response = client.post(
         "/api/auth/register",
@@ -261,9 +253,7 @@ def test_login_with_email_is_case_insensitive(client):
 
 def test_registration_rejects_a_password_without_uppercase(client):
     csrf = client.get("/api/auth/csrf-token").json()["token"]
-    question = client.get("/api/auth/captcha").json()["question"]
-    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
-    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+    answer = client.get("/api/auth/captcha").json()["target_x"]
 
     response = client.post(
         "/api/auth/register",
@@ -281,9 +271,7 @@ def test_registration_rejects_a_password_without_uppercase(client):
 
 def test_registration_rejects_a_password_without_a_digit(client):
     csrf = client.get("/api/auth/csrf-token").json()["token"]
-    question = client.get("/api/auth/captcha").json()["question"]
-    n1, op, n2 = question.replace("What is ", "").replace("?", "").split(" ")
-    answer = int(n1) + int(n2) if op == "+" else int(n1) - int(n2)
+    answer = client.get("/api/auth/captcha").json()["target_x"]
 
     response = client.post(
         "/api/auth/register",

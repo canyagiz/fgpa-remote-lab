@@ -29,17 +29,21 @@ from app.services.email import send_two_factor_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Puzzle-slider captcha geometry, shared with the frontend via the
+# /captcha response - see components/PuzzleCaptcha.tsx. A tolerance is
+# needed because the frontend submits wherever the user's pointer/keyboard
+# release lands, not necessarily the exact pixel.
+CAPTCHA_TRACK_WIDTH = 280
+CAPTCHA_PIECE_SIZE = 44
+CAPTCHA_TOLERANCE_PX = 5
+
 
 @router.get("/captcha", response_model=CaptchaOut)
 def get_captcha(request: Request):
-    num1, num2 = random.randint(1, 10), random.randint(1, 10)
-    operator = random.choice(["+", "-"])
-    if operator == "-" and num1 < num2:
-        num1, num2 = num2, num1
-    result = num1 + num2 if operator == "+" else num1 - num2
+    target_x = random.randint(0, CAPTCHA_TRACK_WIDTH - CAPTCHA_PIECE_SIZE)
 
-    request.session["captcha_result"] = result
-    return CaptchaOut(question=f"What is {num1} {operator} {num2}?")
+    request.session["captcha_result"] = target_x
+    return CaptchaOut(track_width=CAPTCHA_TRACK_WIDTH, piece_size=CAPTCHA_PIECE_SIZE, target_x=target_x)
 
 
 @router.get("/csrf-token")
@@ -102,7 +106,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     request.session.pop("csrf_token", None)
 
     stored_captcha = request.session.pop("captcha_result", None)
-    if stored_captcha is None or payload.captcha_answer != stored_captcha:
+    if stored_captcha is None or abs(payload.captcha_answer - stored_captcha) > CAPTCHA_TOLERANCE_PX:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect security check")
 
     try:
@@ -186,7 +190,11 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             message=f"A verification code has been sent to {mask_email(user.email)}",
         )
 
+    # Overwriting this column invalidates any other browser/device already
+    # signed into this account - see the comparison in deps.get_current_user.
+    user.active_session_token = secrets.token_hex(32)
     request.session["user_id"] = user.id
+    request.session["session_token"] = user.active_session_token
     sync_user_role(db, user)
     db.add(LoginEvent(user_id=user.id))
     db.commit()
@@ -221,10 +229,14 @@ def verify_two_factor(payload: Verify2FARequest, request: Request, db: Session =
     # This is the moment a 2FA login actually succeeds - the sign-in is
     # recorded here, not in /login (which only sent the code).
     db.add(LoginEvent(user_id=user.id))
+    # Overwriting this column invalidates any other browser/device already
+    # signed into this account - see the comparison in deps.get_current_user.
+    user.active_session_token = secrets.token_hex(32)
     db.commit()
 
     request.session.pop("pending_2fa_user_id", None)
     request.session["user_id"] = user.id
+    request.session["session_token"] = user.active_session_token
     return user
 
 

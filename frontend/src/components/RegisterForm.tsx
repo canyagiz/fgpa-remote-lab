@@ -4,9 +4,11 @@ import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, getCaptcha, getCsrfToken, register } from "../api/client";
+import { CaptchaResponse } from "../api/types";
 import { useToast } from "../context/ToastContext";
 import PasswordInput from "./PasswordInput";
 import PasswordStrength from "./PasswordStrength";
+import PuzzleCaptcha from "./PuzzleCaptcha";
 
 interface RegisterFormProps {
   onSwitchToLogin: () => void;
@@ -20,8 +22,9 @@ export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFor
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [captchaQuestion, setCaptchaQuestion] = useState("Loading...");
-  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [captcha, setCaptcha] = useState<CaptchaResponse | null>(null);
+  const [captchaFailed, setCaptchaFailed] = useState(false);
+  const [sliderX, setSliderX] = useState(0);
   const [csrfToken, setCsrfToken] = useState("");
   // Hidden from real users via CSS; bots that fill every field trip this.
   const [website, setWebsite] = useState("");
@@ -48,16 +51,17 @@ export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFor
     // other endpoint's write. That's exactly the bug where a correct
     // captcha answer got rejected: the CSRF and captcha writes stomped on
     // each other and only one survived.
-    const captcha = await getCaptcha();
-    setCaptchaQuestion(captcha.question);
-    setCaptchaAnswer("");
+    const captchaData = await getCaptcha();
+    setCaptcha(captchaData);
+    setCaptchaFailed(false);
+    setSliderX(0);
 
     const csrf = await getCsrfToken();
     setCsrfToken(csrf.token);
   }
 
   useEffect(() => {
-    loadCaptchaAndCsrf().catch(() => setCaptchaQuestion("Failed to load - try refreshing."));
+    loadCaptchaAndCsrf().catch(() => setCaptchaFailed(true));
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -78,7 +82,7 @@ export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFor
         username,
         email,
         password,
-        captcha_answer: parseInt(captchaAnswer, 10) || 0,
+        captcha_answer: sliderX,
         csrf_token: csrfToken,
         website,
       });
@@ -157,14 +161,20 @@ export default function RegisterForm({ onSwitchToLogin, onSuccess }: RegisterFor
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="captcha">Security check: {captchaQuestion}</Label>
-            <Input
-              id="captcha"
-              type="number"
-              value={captchaAnswer}
-              onChange={(e) => setCaptchaAnswer(e.target.value)}
-              required
-            />
+            <Label>Security check</Label>
+            {captcha ? (
+              <PuzzleCaptcha
+                trackWidth={captcha.track_width}
+                pieceSize={captcha.piece_size}
+                targetX={captcha.target_x}
+                value={sliderX}
+                onChange={setSliderX}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {captchaFailed ? "Failed to load - try refreshing." : "Loading..."}
+              </p>
+            )}
           </div>
 
           {/* Honeypot: hidden from sighted users, real bots fill it in. */}

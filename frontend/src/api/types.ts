@@ -11,7 +11,9 @@ export interface User {
 
 export interface CaptchaResponse {
   success: boolean;
-  question: string;
+  track_width: number;
+  piece_size: number;
+  target_x: number;
 }
 
 export interface MessageResponse {
