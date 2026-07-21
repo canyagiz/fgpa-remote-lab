@@ -503,3 +503,87 @@ class ShuttleEnrolled(BaseModel):
     message: str = (
         "Store this token now - it is shown only once and cannot be retrieved later."
     )
+
+
+# ---- Boards and lab templates ----------------------------------------
+
+
+class BoardCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=100)
+    family: str = Field(max_length=32)
+    # The device this board is identified by. Must currently be reported
+    # by some shuttle - claiming a serial nothing has ever seen is almost
+    # always a typo, and is refused with that explanation.
+    programmer_serial: str = Field(min_length=1, max_length=128)
+    expected_idcode: str | None = Field(default=None, max_length=32)
+    video_capture_serial: str | None = Field(default=None, max_length=128)
+    gpio_endpoint: str | None = Field(default=None, max_length=128)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class BoardOut(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    label: str
+    family: str
+    expected_idcode: str | None
+    programmer_serial: str
+    video_capture_serial: str | None
+    gpio_endpoint: str | None
+    notes: str | None
+    created_at: datetime
+    # Derived, not stored: a board lives wherever its programmer is
+    # currently reported, so this changes by itself when hardware moves.
+    shuttle_id: int | None = None
+    shuttle_name: str | None = None
+
+
+class UnclaimedDeviceOut(BaseModel):
+    """A programmer no board has claimed yet - the "new hardware" queue."""
+
+    device_id: int
+    shuttle_id: int
+    shuttle_name: str
+    usb_serial: str
+    product: str | None
+    manufacturer: str | None
+    signature: str | None
+    sysfs_path: str
+    jtag_chain: list[dict] | None
+    first_seen_at: datetime
+
+
+class LabTemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=2000)
+    # Validated against the requirement union in
+    # services/requirements.py before being stored, so a template can
+    # never hold a shape the engine cannot later parse.
+    requirements: list[dict] = Field(default_factory=list, max_length=32)
+
+
+class LabTemplateOut(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    name: str
+    description: str | None
+    requirements: list[dict]
+    created_at: datetime
+
+
+class RequirementResultOut(BaseModel):
+    type: str
+    status: str
+    message: str
+
+
+class GapReportOut(BaseModel):
+    shuttle_id: int
+    shuttle_name: str
+    template_id: int
+    template_name: str
+    deployable: bool
+    missing_count: int
+    results: list[RequirementResultOut]

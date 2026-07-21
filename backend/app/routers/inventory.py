@@ -17,28 +17,37 @@ becomes part of the fleet" is not a trust model.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_admin
-from app.models import Device, Shuttle, ShuttleRole, User
+from app.models import Board, Device, FpgaFamily, LabTemplate, Shuttle, ShuttleRole, User
 from app.schemas import (
     AgentReport,
     AgentReportAccepted,
+    BoardCreate,
+    BoardOut,
     CreateShuttleRequest,
     DeviceOut,
+    GapReportOut,
+    LabTemplateCreate,
+    LabTemplateOut,
     MessageOut,
+    RequirementResultOut,
     ShuttleEnrolled,
     ShuttleOut,
+    UnclaimedDeviceOut,
 )
 from app.security import (
     generate_shuttle_token,
     parse_shuttle_token,
     verify_shuttle_secret,
 )
-from app.services import inventory
+from app.services import inventory, matching
+from app.services import requirements as requirements_module
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -223,3 +232,230 @@ def list_devices(
     if not include_absent:
         query = query.where(Device.is_present.is_(True))
     return list(db.scalars(query))
+
+
+# ---- Boards ----------------------------------------------------------
+#
+# A board is the human half of the model: discovery finds a cable, a
+# person says what is on the end of it. That step cannot be automated
+# away - an IDCODE identifies silicon, not a board, and the USB-Blaster
+# in this lab reports one code shared by three chip families.
+
+
+def _board_out(db: Session, board: Board) -> BoardOut:
+    # Resolved live rather than stored: the board is wherever its
+    # programmer is currently being reported from.
+    row = db.execute(
+        select(Shuttle.id, Shuttle.name)
+        .join(Device, Device.shuttle_id == Shuttle.id)
+        .where(
+            Device.usb_serial == board.programmer_serial,
+            Device.is_present.is_(True),
+        )
+        .limit(1)
+    ).first()
+    return BoardOut(
+        id=board.id,
+        label=board.label,
+        family=board.family.value,
+        expected_idcode=board.expected_idcode,
+        programmer_serial=board.programmer_serial,
+        video_capture_serial=board.video_capture_serial,
+        gpio_endpoint=board.gpio_endpoint,
+        notes=board.notes,
+        created_at=board.created_at,
+        shuttle_id=row[0] if row else None,
+        shuttle_name=row[1] if row else None,
+    )
+
+
+@admin_router.get("/boards", response_model=list[BoardOut])
+def list_boards(db: Session = Depends(get_db)):
+    boards = db.scalars(select(Board).order_by(Board.id)).all()
+    return [_board_out(db, b) for b in boards]
+
+
+@admin_router.get("/boards/unclaimed", response_model=list[UnclaimedDeviceOut])
+def list_unclaimed(db: Session = Depends(get_db)):
+    """Programmers that are attached but that no board has claimed.
+
+    This is the queue an admin works through after someone plugs
+    something in.
+    """
+    shuttles = {s.id: s.name for s in db.scalars(select(Shuttle))}
+    return [
+        UnclaimedDeviceOut(
+            device_id=d.id,
+            shuttle_id=d.shuttle_id,
+            shuttle_name=shuttles.get(d.shuttle_id, "?"),
+            usb_serial=d.usb_serial,
+            product=d.product,
+            manufacturer=d.manufacturer,
+            signature=d.signature,
+            sysfs_path=d.sysfs_path,
+            jtag_chain=d.jtag_chain,
+            first_seen_at=d.first_seen_at,
+        )
+        for d in matching.unclaimed_devices(db)
+    ]
+
+
+@admin_router.post("/boards", response_model=BoardOut, status_code=201)
+def register_board(
+    payload: BoardCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    try:
+        family = FpgaFamily(payload.family)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Family must be one of: {', '.join(f.value for f in FpgaFamily)}",
+        )
+
+    # Refuse a serial nothing has ever reported. Almost always a typo,
+    # and a board bound to a serial that does not exist would silently
+    # never satisfy any requirement - failing now, with the reason, beats
+    # failing later without one.
+    seen = db.scalar(
+        select(Device.id).where(Device.usb_serial == payload.programmer_serial).limit(1)
+    )
+    if seen is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"No shuttle has reported a device with serial "
+                f"{payload.programmer_serial!r}. Check the serial, or wait for the "
+                "agent on that shuttle to report."
+            ),
+        )
+
+    board = Board(
+        label=payload.label.strip(),
+        family=family,
+        expected_idcode=payload.expected_idcode,
+        programmer_serial=payload.programmer_serial,
+        video_capture_serial=payload.video_capture_serial,
+        gpio_endpoint=payload.gpio_endpoint,
+        notes=payload.notes,
+        registered_by_user_id=admin.id,
+    )
+    db.add(board)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That label, or that programmer serial, is already registered to a board",
+        )
+    db.refresh(board)
+    return _board_out(db, board)
+
+
+@admin_router.delete("/boards/{board_id}", response_model=MessageOut)
+def delete_board(board_id: int, db: Session = Depends(get_db)):
+    board = db.get(Board, board_id)
+    if board is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Board not found")
+    label = board.label
+    db.delete(board)
+    db.commit()
+    return MessageOut(success=True, message=f"Board {label} deregistered")
+
+
+# ---- Lab templates ---------------------------------------------------
+
+
+@admin_router.get("/templates", response_model=list[LabTemplateOut])
+def list_templates(db: Session = Depends(get_db)):
+    return list(db.scalars(select(LabTemplate).order_by(LabTemplate.id)))
+
+
+@admin_router.post("/templates", response_model=LabTemplateOut, status_code=201)
+def create_template(
+    payload: LabTemplateCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    # Parse before storing, so a template can never hold a shape the
+    # matching engine will later choke on. The error text names the
+    # accepted types rather than leaking a pydantic traceback.
+    try:
+        requirements_module.parse(payload.requirements)
+    except ValidationError as err:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid requirements: {err.errors()[0].get('msg', 'unrecognised shape')}",
+        )
+
+    template = LabTemplate(
+        name=payload.name.strip(),
+        description=payload.description,
+        requirements=payload.requirements,
+        created_by_user_id=admin.id,
+    )
+    db.add(template)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="A template with that name already exists"
+        )
+    db.refresh(template)
+    return template
+
+
+@admin_router.delete("/templates/{template_id}", response_model=MessageOut)
+def delete_template(template_id: int, db: Session = Depends(get_db)):
+    template = db.get(LabTemplate, template_id)
+    if template is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    name = template.name
+    db.delete(template)
+    db.commit()
+    return MessageOut(success=True, message=f"Template {name} deleted")
+
+
+# ---- The gap report --------------------------------------------------
+
+
+def _gap_out(report: matching.GapReport) -> GapReportOut:
+    return GapReportOut(
+        shuttle_id=report.shuttle_id,
+        shuttle_name=report.shuttle_name,
+        template_id=report.template_id,
+        template_name=report.template_name,
+        deployable=report.deployable,
+        missing_count=report.missing_count,
+        results=[
+            RequirementResultOut(type=r.type, status=r.status.value, message=r.message)
+            for r in report.results
+        ],
+    )
+
+
+@admin_router.get("/templates/{template_id}/gaps", response_model=list[GapReportOut])
+def template_gaps(template_id: int, db: Session = Depends(get_db)):
+    """Where can this lab run, and what is stopping it everywhere else?"""
+    template = db.get(LabTemplate, template_id)
+    if template is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    return [_gap_out(r) for r in matching.evaluate_across_fleet(db, template)]
+
+
+@admin_router.get("/gaps", response_model=list[GapReportOut])
+def all_gaps(db: Session = Depends(get_db)):
+    """Every template against every shuttle - the fleet overview."""
+    reports = []
+    for template in db.scalars(select(LabTemplate).order_by(LabTemplate.id)):
+        reports.extend(matching.evaluate_across_fleet(db, template))
+    return [_gap_out(r) for r in reports]
+
+
+@admin_router.get("/unused", response_model=list[DeviceOut])
+def unused(db: Session = Depends(get_db)):
+    """Hardware no template has any use for - the spare side of the report."""
+    return matching.unused_devices(db)

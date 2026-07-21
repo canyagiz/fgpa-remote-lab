@@ -301,6 +301,97 @@ class Device(Base):
     )
 
 
+class FpgaFamily(str, enum.Enum):
+    cyclone_iv = "cyclone_iv"
+    cyclone_v = "cyclone_v"
+    cyclone_10 = "cyclone_10"
+    zynq_7020 = "zynq_7020"
+
+
+class Board(Base):
+    """A physical board as a human knows it.
+
+    The bridge between an anonymous USB serial and "the EduPow board in
+    room 3". Written once by an admin and rarely touched again - which is
+    exactly why it is a separate table from Device, whose every column is
+    overwritten on each scan.
+
+    Deliberately NOT tied to a shuttle. A board is wherever its
+    programmer currently is; binding it to a machine would mean moving a
+    cable required editing the record, which is the manual bookkeeping
+    this system exists to remove. The shuttle is derived at query time by
+    finding which one currently reports `programmer_serial`.
+
+    A human step here is unavoidable, not a shortcut: an IDCODE
+    identifies silicon, not a board. The USB-Blaster in this lab reads
+    0x020F30DD, which Quartus resolves to "10CL025(Y|Z)/EP3C25/EP4CE22" -
+    one code, three families. Discovery genuinely cannot conclude which
+    board this is.
+    """
+
+    __tablename__ = "boards"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(100))
+    family: Mapped[FpgaFamily] = mapped_column(Enum(FpgaFamily))
+    # What a JTAG probe should report. Optional, because probing is
+    # disruptive and may never have run. When set, a mismatch means the
+    # hardware behind this cable changed - which raises a question for a
+    # human rather than triggering an automatic decision.
+    expected_idcode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    # The identity link. Matches Device.usb_serial, not a device row id:
+    # device rows are transient (a replug can create a new one) while a
+    # serial is burned into the hardware.
+    programmer_serial: Mapped[str] = mapped_column(String(128))
+    video_capture_serial: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Where the Raspberry Pi driving this board's switches listens, e.g.
+    # "10.30.70.50:20000". Recorded, not yet probed - see
+    # services/requirements.py::GpioRequirement.
+    gpio_endpoint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    registered_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        # One board per programmer. Claiming a serial that already backs
+        # another board is a mistake worth refusing rather than silently
+        # producing two boards that are really one.
+        Index("ix_boards_programmer_serial", "programmer_serial", unique=True),
+        Index("ix_boards_label_lower", func.lower(label), unique=True),
+    )
+
+
+class LabTemplate(Base):
+    """What a lab NEEDS - never what it currently has.
+
+    The requirements list is stored as JSON and parsed into typed
+    objects by a pydantic discriminated union (see
+    services/requirements.py). That choice keeps adding a new kind of
+    hardware to a one-class change with no migration, and matches how
+    the rest of this schema already stores structured values
+    (Lab.keywords, UserProfile.social_links).
+    """
+
+    __tablename__ = "lab_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # e.g. [{"type": "fpga", "family": "cyclone_iv"},
+    #       {"type": "video_capture", "require_signal": true}]
+    requirements: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (Index("ix_lab_templates_name_lower", func.lower(name), unique=True),)
+
+
 class AdminEmail(Base):
     """An email granted admin rights at runtime by an existing admin.
 
