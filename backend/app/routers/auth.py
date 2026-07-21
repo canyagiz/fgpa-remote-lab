@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import LoginEvent, RegistrationAttempt, TwoFactorCode, User
+from app.models import LoginAttempt, LoginEvent, RegistrationAttempt, TwoFactorCode, User
 from app.schemas import (
     CaptchaOut,
     LoginRequest,
@@ -56,6 +56,27 @@ def _two_factor_cooldown_remaining(db: Session, user_id: int) -> int:
         return 0
     elapsed_seconds = (datetime.utcnow() - last_code.created_at).total_seconds()
     return max(int(settings.two_factor_resend_cooldown_seconds - elapsed_seconds), 0)
+
+
+def _login_rate_limit_retry_at(db: Session, ip_address: str) -> datetime | None:
+    """When this IP may next attempt a login, or None if it's clear right
+    now. Same sliding-window shape as the registration limiter
+    (RegistrationAttempt) - the window clears from its oldest end, not
+    all at once. Only failed attempts are ever written here (see the
+    call site in login()), so this only ever fires on a real string of
+    wrong guesses, never on ordinary use.
+    """
+    now = datetime.utcnow()
+    window_start = now - timedelta(minutes=settings.login_rate_limit_window_minutes)
+    recent_attempt_times = db.scalars(
+        select(LoginAttempt.attempt_time)
+        .where(LoginAttempt.ip_address == ip_address)
+        .where(LoginAttempt.attempt_time > window_start)
+        .order_by(LoginAttempt.attempt_time)
+    ).all()
+    if len(recent_attempt_times) < settings.login_rate_limit_max_attempts:
+        return None
+    return recent_attempt_times[0] + timedelta(minutes=settings.login_rate_limit_window_minutes)
 
 
 @router.get("/captcha", response_model=CaptchaOut)
@@ -195,6 +216,21 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
 
 @router.post("/login", response_model=LoginResult)
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    # Checked before touching the password hash at all - a string of
+    # wrong guesses from one IP gets a flat 429, not another bcrypt
+    # comparison (bcrypt is slow on purpose, but that's not a substitute
+    # for an actual lockout: it only throttles a single worker's request
+    # rate, not a distributed/parallel guesser).
+    ip_address = request.client.host if request.client else "unknown"
+    retry_at = _login_rate_limit_retry_at(db, ip_address)
+    if retry_at is not None:
+        wait_seconds = max(int((retry_at - datetime.utcnow()).total_seconds()), 1)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many attempts. Please try again in {_format_wait_text(wait_seconds)}.",
+            headers={"Retry-After": str(wait_seconds)},
+        )
+
     # Case-insensitive, and matches either username or email - both are
     # unique per user (see the matching lower() indexes on User), so
     # matching on either can never resolve to more than one account.
@@ -208,6 +244,12 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     # Deliberately no plaintext fallback here: the old repo accepted
     # `password === stored_value` as a bypass, which was a real backdoor.
     if user is None or not verify_password(payload.password, user.password_hash):
+        # Recorded only on a genuine failure (unknown identifier or wrong
+        # password) - a successful login never writes a row here, so
+        # normal use never eats into the window, only a real string of
+        # wrong guesses does.
+        db.add(LoginAttempt(ip_address=ip_address))
+        db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
     if user.two_factor_enabled:

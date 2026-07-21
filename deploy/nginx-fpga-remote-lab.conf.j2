@@ -43,7 +43,15 @@ server {
     location ~ ^/hw/\d+/logout$ {
         proxy_pass http://127.0.0.1:8001;
         proxy_set_header Host $http_host;
-        proxy_set_header X-Forwarded-For $remote_addr;
+        # Append to whatever X-Forwarded-For the host's own edge nginx
+        # already set (the real browser IP), rather than overwriting it
+        # with $remote_addr - at this hop $remote_addr is the *host's*
+        # nginx, not the browser, so overwriting here would collapse
+        # every real visitor down to one shared IP for anything that
+        # reads this header downstream (see the same fix on the SPA/api
+        # location below - that one is what login/register rate
+        # limiting actually depends on).
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
@@ -82,7 +90,17 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8001;
         proxy_set_header Host $http_host;
-        proxy_set_header X-Forwarded-For $remote_addr;
+        # Append, don't overwrite: the host's own edge nginx already put
+        # the real browser IP in this header (proxy_add_x_forwarded_for
+        # there too) - setting it to bare $remote_addr at this second hop
+        # would replace that with the *host's* own address, so every
+        # request FastAPI sees would appear to come from the same place
+        # regardless of which real visitor sent it. That silently broke
+        # the login/register rate limiters (app/routers/auth.py), which
+        # key off request.client.host - uvicorn is started with
+        # --proxy-headers (see fpga-remote-lab.service) specifically to
+        # trust this header from its localhost peer and use it instead.
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }

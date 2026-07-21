@@ -172,6 +172,21 @@ class RegistrationAttempt(Base):
     attempt_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class LoginAttempt(Base):
+    """One row per FAILED login attempt (unknown identifier or wrong
+    password), keyed by source IP - see routers/auth.py::login. A
+    successful login never writes a row here, so normal use (including a
+    single mistyped password) never counts against the window - only a
+    string of wrong guesses from the same IP does.
+    """
+
+    __tablename__ = "login_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ip_address: Mapped[str] = mapped_column(String(45))
+    attempt_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class LoginEvent(Base):
     """One row per successful sign-in (plain login or the 2FA verify step).
 

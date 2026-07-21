@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     two_factor_resend_cooldown_seconds: int = 180
     registration_rate_limit_window_minutes: int = 15
     registration_rate_limit_max_attempts: int = 5
+    # Same window/lockout pattern as registration, but counting only
+    # FAILED attempts (see models.LoginAttempt) - a burst of wrong
+    # passwords from one IP gets locked out; normal login traffic, even
+    # a single mistyped password, never gets close to the limit.
+    login_rate_limit_window_minutes: int = 15
+    login_rate_limit_max_attempts: int = 8
     # A real DNS MX-record lookup at registration time (see schemas.py -
     # RegisterRequest), not just email syntax - catches domains that are
     # syntactically valid but can't actually receive mail (confirmed live:
