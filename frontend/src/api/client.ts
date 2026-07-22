@@ -181,6 +181,19 @@ export const registerBoard = (data: {
   gpio_endpoint?: string | null;
   notes?: string | null;
 }) => post<Board>("/api/admin/fleet/boards", data);
+// Partial: only the fields sent are touched, so this cannot blank the
+// rest. An empty string clears an optional field.
+export const updateBoard = (
+  id: number,
+  data: Partial<{
+    label: string;
+    family: string;
+    expected_idcode: string | null;
+    video_capture_serial: string | null;
+    gpio_endpoint: string | null;
+    notes: string | null;
+  }>,
+) => request<Board>(`/api/admin/fleet/boards/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 export const deleteBoard = (id: number) => del<MessageResponse>(`/api/admin/fleet/boards/${id}`);
 
 export const getTemplates = () => get<LabTemplate[]>("/api/admin/fleet/templates");

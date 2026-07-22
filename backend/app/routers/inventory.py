@@ -40,6 +40,7 @@ from app.schemas import (
     AgentReportAccepted,
     BoardCreate,
     BoardOut,
+    BoardUpdate,
     CreateShuttleRequest,
     DeploymentCreate,
     DeploymentOut,
@@ -363,6 +364,66 @@ def register_board(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="That label, or that programmer serial, is already registered to a board",
+        )
+    db.refresh(board)
+    return _board_out(db, board)
+
+
+@admin_router.patch("/boards/{board_id}", response_model=BoardOut)
+def update_board(board_id: int, payload: BoardUpdate, db: Session = Depends(get_db)):
+    """Revise a board's recorded details.
+
+    Only fields actually present in the request are touched, so a client
+    sending one field cannot blank the rest. An empty string clears an
+    optional field - that is how a capture card or GPIO controller gets
+    unassigned - while omitting the field leaves it alone.
+    """
+    board = db.get(Board, board_id)
+    if board is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Board not found")
+
+    fields = payload.model_dump(exclude_unset=True)
+
+    if "family" in fields and fields["family"] is not None:
+        try:
+            board.family = FpgaFamily(fields.pop("family"))
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Family must be one of: {', '.join(f.value for f in FpgaFamily)}",
+            )
+
+    if fields.get("video_capture_serial"):
+        # Refuse a serial nothing has reported, same as at registration -
+        # a board pointed at a capture card that does not exist would
+        # report "not attached" forever with no hint that the value was
+        # simply mistyped.
+        seen = db.scalar(
+            select(Device.id)
+            .where(Device.usb_serial == fields["video_capture_serial"])
+            .limit(1)
+        )
+        if seen is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"No shuttle has reported a device with serial "
+                    f"{fields['video_capture_serial']!r}"
+                ),
+            )
+
+    for name, value in fields.items():
+        if name == "family":
+            continue
+        # Empty string means "clear this", None means "not supplied".
+        setattr(board, name, value if value != "" else None)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="That label is already in use"
         )
     db.refresh(board)
     return _board_out(db, board)

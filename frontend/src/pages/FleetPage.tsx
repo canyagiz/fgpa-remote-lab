@@ -207,6 +207,34 @@ export default function FleetPage() {
     }
   }
 
+  async function handleSetCapture(board: Board) {
+    const options = captureDevices
+      .map((d, i) => `${i + 1}. ${d.usb_serial} (${describeDevice(d.manufacturer, d.product)})`)
+      .join("\n");
+    const answer = prompt(
+      `Which capture card watches ${board.label}?\n\n${options}\n\n` +
+        `Enter the number, or 0 for none.`,
+      "1",
+    );
+    if (answer === null) return;
+    const index = Number(answer);
+    if (Number.isNaN(index) || index < 0 || index > captureDevices.length) return;
+
+    setBusy(`board-${board.id}`);
+    try {
+      await api.updateBoard(board.id, {
+        // Empty string clears it; a serial sets it.
+        video_capture_serial: index === 0 ? "" : (captureDevices[index - 1].usb_serial ?? ""),
+      });
+      showSuccess(`${board.label} updated`);
+      await refresh();
+    } catch (err) {
+      showError(err instanceof api.ApiError ? err.message : "Failed to update board");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleDeleteBoard(board: Board) {
     if (!confirm(`Deregister "${board.label}"? The hardware stays; only its registration is removed.`))
       return;
@@ -259,6 +287,7 @@ export default function FleetPage() {
     }
   }
 
+  const captureDevices = devices.filter((d) => d.kind === "video_capture");
   const onlineCount = shuttles.filter((s) => s.status === "online").length;
   const blockedGaps = gaps.filter((g) => !g.deployable);
 
@@ -597,13 +626,14 @@ export default function FleetPage() {
                   <TableHead>Family</TableHead>
                   <TableHead>Programmer serial</TableHead>
                   <TableHead>Currently on</TableHead>
+                  <TableHead>Capture</TableHead>
                   <TableHead>GPIO</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {boards.length === 0 ? (
-                  <EmptyRow colSpan={6}>
+                  <EmptyRow colSpan={7}>
                     No boards registered. They appear here once you claim a detected programmer.
                   </EmptyRow>
                 ) : (
@@ -619,18 +649,36 @@ export default function FleetPage() {
                           <span className="text-muted-foreground">not attached</span>
                         )}
                       </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {/* Flagged rather than left blank: a board with no
+                            capture card recorded cannot have its video
+                            verified, which blocks any lab that needs one. */}
+                        {b.video_capture_serial ?? (
+                          <span className="text-warning-muted-foreground">not set</span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {b.gpio_endpoint ?? "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={busy === `board-${b.id}`}
-                          onClick={() => handleDeleteBoard(b)}
-                        >
-                          Deregister
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy === `board-${b.id}` || captureDevices.length === 0}
+                            onClick={() => handleSetCapture(b)}
+                          >
+                            Set capture
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={busy === `board-${b.id}`}
+                            onClick={() => handleDeleteBoard(b)}
+                          >
+                            Deregister
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -751,7 +799,12 @@ export default function FleetPage() {
         </Card>
       )}
 
-      <ClaimBoardDialog device={claiming} onClose={() => setClaiming(null)} onDone={refresh} />
+      <ClaimBoardDialog
+        device={claiming}
+        captureOptions={captureDevices}
+        onClose={() => setClaiming(null)}
+        onDone={refresh}
+      />
       <TokenDialog issued={issuedToken} onClose={() => setIssuedToken(null)} />
     </div>
   );
@@ -805,10 +858,12 @@ function TokenDialog({
 /** Recording what a detected programmer is actually attached to. */
 function ClaimBoardDialog({
   device,
+  captureOptions,
   onClose,
   onDone,
 }: {
   device: UnclaimedDevice | null;
+  captureOptions: Device[];
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
@@ -816,13 +871,18 @@ function ClaimBoardDialog({
   const [label, setLabel] = useState("");
   const [family, setFamily] = useState(FAMILIES[0].value);
   const [gpio, setGpio] = useState("");
+  const [capture, setCapture] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setLabel("");
     setFamily(FAMILIES[0].value);
     setGpio("");
-  }, [device?.device_id]);
+    // Pre-select when the shuttle has exactly one card - with a single
+    // candidate there is nothing to choose, and making the operator
+    // choose it anyway is how the field ends up skipped.
+    setCapture(captureOptions.length === 1 ? (captureOptions[0].usb_serial ?? "") : "");
+  }, [device?.device_id, captureOptions.length]);
 
   // A probed chain is offered as the expected IDCODE so a later swap is
   // noticed. Zynq parts report their ARM core alongside the fabric, so
@@ -841,6 +901,7 @@ function ClaimBoardDialog({
         family,
         programmer_serial: device.usb_serial,
         expected_idcode: suggestedIdcode,
+        video_capture_serial: capture || null,
         gpio_endpoint: gpio.trim() || null,
       });
       showSuccess(`${label.trim()} registered`);
@@ -903,6 +964,27 @@ function ClaimBoardDialog({
                     This programmer has not been JTAG-probed, so the family cannot be guessed.
                   </p>
                 )}
+              </div>
+
+              <div>
+                <Label htmlFor="board-capture">HDMI capture card</Label>
+                <select
+                  id="board-capture"
+                  value={capture}
+                  onChange={(e) => setCapture(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <option value="">None</option>
+                  {captureOptions.map((c) => (
+                    <option key={c.id} value={c.usb_serial ?? ""}>
+                      {describeDevice(c.manufacturer, c.product)} — {c.usb_serial}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A capture card watches one board's HDMI output, so it is recorded per board.
+                  Without this the lab's video cannot be checked.
+                </p>
               </div>
 
               <div>

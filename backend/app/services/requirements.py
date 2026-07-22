@@ -119,27 +119,61 @@ class ProgrammerRequirement(Requirement):
 
 
 class VideoCaptureRequirement(Requirement):
-    """A capture card, and by default a live HDMI signal through it."""
+    """A capture card wired to this board, and by default a live signal.
+
+    Resolved through the board rather than the shuttle. A capture card
+    watches ONE board's HDMI output - it is not a machine-wide resource -
+    so "is there a capture card somewhere on this shuttle" is the wrong
+    question the moment a shuttle holds two boards and one card. It
+    would report both labs ready while only one of them has a picture.
+
+    When the template names a family (so a specific board is in
+    question) but that board has no capture card recorded, the honest
+    answer is that this cannot be verified - not that it passes. Saying
+    it passes is exactly the silent wrongness this resolution exists to
+    remove.
+    """
 
     type: Literal["video_capture"] = "video_capture"
     require_signal: bool = True
 
     def check(self, inv: "ShuttleInventory") -> RequirementResult:
-        device = inv.find_device(kind="video_capture")
-        if device is None:
-            return self._result(
-                RequirementStatus.missing, "No HDMI capture card on this shuttle"
-            )
+        board = inv.subject_board
+
+        if board is not None:
+            if not board.video_capture_serial:
+                return self._result(
+                    RequirementStatus.degraded,
+                    f"No capture card is recorded for {board.label} - set which one "
+                    "watches this board so its video can be checked",
+                )
+            device = inv.find_device_by_serial(board.video_capture_serial)
+            if device is None:
+                return self._result(
+                    RequirementStatus.missing,
+                    f"{board.label}'s capture card ({board.video_capture_serial}) "
+                    "is not attached to this shuttle",
+                )
+        else:
+            # No family named, so the template is not about a particular
+            # board and the shuttle-wide question is the right one.
+            device = inv.find_device(kind="video_capture")
+            if device is None:
+                return self._result(
+                    RequirementStatus.missing, "No HDMI capture card on this shuttle"
+                )
+
+        where = f"{board.label}'s capture card" if board else "Capture card"
         if not self.require_signal:
             return self._result(
-                RequirementStatus.satisfied, f"Capture card present ({device.usb_serial})"
+                RequirementStatus.satisfied, f"{where} present ({device.usb_serial})"
             )
         if device.has_video_signal is False:
             # This is the failure a student would otherwise discover as a
             # black video feed, mid-session.
             return self._result(
                 RequirementStatus.degraded,
-                f"Capture card {device.usb_serial} reports no HDMI signal - "
+                f"{where} ({device.usb_serial}) reports no HDMI signal - "
                 "check the cable from the board",
             )
         if device.has_video_signal is None:
@@ -148,10 +182,10 @@ class VideoCaptureRequirement(Requirement):
             # answer a query.
             return self._result(
                 RequirementStatus.satisfied,
-                f"Capture card {device.usb_serial} present (signal state unknown)",
+                f"{where} ({device.usb_serial}) present, signal state unknown",
             )
         return self._result(
-            RequirementStatus.satisfied, f"Capture card {device.usb_serial} has signal"
+            RequirementStatus.satisfied, f"{where} ({device.usb_serial}) has signal"
         )
 
 

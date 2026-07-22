@@ -630,3 +630,20 @@ class ShuttleAddressUpdate(BaseModel):
     # Admin-set, never taken from an agent report: this is what student
     # browsers are ultimately pointed at.
     address: str = Field(min_length=1, max_length=255)
+
+
+class BoardUpdate(BaseModel):
+    """Fields a human can revise after registration.
+
+    Deliberately excludes programmer_serial: that is the board's
+    identity, and letting it be edited would silently reassign every
+    deployment and gap report that resolved through it. Re-register
+    instead, which forces the decision to be explicit.
+    """
+
+    label: str | None = Field(default=None, min_length=1, max_length=100)
+    family: str | None = Field(default=None, max_length=32)
+    expected_idcode: str | None = Field(default=None, max_length=32)
+    video_capture_serial: str | None = Field(default=None, max_length=128)
+    gpio_endpoint: str | None = Field(default=None, max_length=128)
+    notes: str | None = Field(default=None, max_length=2000)

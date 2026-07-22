@@ -90,6 +90,10 @@ def _board(client, **overrides):
         "label": "EduPow CIV #10",
         "family": "cyclone_iv",
         "programmer_serial": "91d28408",
+        # Which card watches this board, not merely that the shuttle has
+        # one - a capture card serves a single board's HDMI output, so
+        # the video check resolves through here.
+        "video_capture_serial": "D206240701386",
     }
     payload.update(overrides)
     response = client.post("/api/admin/fleet/boards", json=payload)

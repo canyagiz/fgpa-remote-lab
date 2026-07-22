@@ -12,7 +12,7 @@ Two answers come out of it, and both were asked for:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,6 +35,14 @@ class ShuttleInventory:
     shuttle: Shuttle
     devices: list[Device] = field(default_factory=list)
     boards: list[Board] = field(default_factory=list)
+    # Which board this particular evaluation is about, resolved from the
+    # template's own fpga requirement (see evaluate). Requirements that
+    # are per-board rather than per-shuttle - a capture card serves ONE
+    # board's HDMI output, not the machine - check against this instead
+    # of taking whatever else happens to be plugged into the same
+    # shuttle. None when the template names no family, in which case the
+    # question genuinely is about the shuttle.
+    subject_board: Board | None = None
 
     def find_board(self, family: FpgaFamily) -> Board | None:
         for board in self.boards:
@@ -49,6 +57,12 @@ class ShuttleInventory:
             if signature is not None and device.signature != signature:
                 continue
             return device
+        return None
+
+    def find_device_by_serial(self, serial: str) -> Device | None:
+        for device in self.devices:
+            if device.usb_serial == serial:
+                return device
         return None
 
     def device_for_board(self, board: Board) -> Device | None:
@@ -116,12 +130,24 @@ def evaluate(template: LabTemplate, inventory: ShuttleInventory) -> GapReport:
     requirement type is introduced.
     """
     parsed = req.parse(template.requirements or [])
+
+    # Resolve which board this template is about before checking
+    # anything, so per-board requirements know what they are asking
+    # about. A template that names no fpga family is not about a
+    # particular board, and subject_board stays None.
+    subject = None
+    for requirement in parsed:
+        if isinstance(requirement, req.FpgaRequirement):
+            subject = inventory.find_board(family=requirement.family)
+            break
+    scoped = replace(inventory, subject_board=subject)
+
     return GapReport(
         shuttle_id=inventory.shuttle.id,
         shuttle_name=inventory.shuttle.name,
         template_id=template.id,
         template_name=template.name,
-        results=[requirement.check(inventory) for requirement in parsed],
+        results=[requirement.check(scoped) for requirement in parsed],
     )
 
 

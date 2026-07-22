@@ -189,7 +189,7 @@ def test_a_fully_satisfied_lab_is_deployable(client):
     _admin(client)
     _, token = _enrol(client)
     _post(client, token, _report([BLASTER, MAGEWELL], _signal("D206240701386", True)))
-    _register_board(client)
+    _register_board(client, video_capture_serial="D206240701386")
     template_id = _template(client)
 
     report = client.get(f"/api/admin/fleet/templates/{template_id}/gaps").json()[0]
@@ -201,17 +201,21 @@ def test_a_fully_satisfied_lab_is_deployable(client):
 def test_missing_hardware_is_named(client):
     _admin(client)
     _, token = _enrol(client)
-    # Board present, capture card absent.
-    _post(client, token, _report([BLASTER]))
-    _register_board(client)
+    _post(client, token, _report([BLASTER, MAGEWELL], _signal("D206240701386", True)))
+    _register_board(client, video_capture_serial="D206240701386")
     template_id = _template(client)
+
+    # The capture card is unplugged; the board stays.
+    _post(client, token, _report([BLASTER]))
 
     report = client.get(f"/api/admin/fleet/templates/{template_id}/gaps").json()[0]
     assert report["deployable"] is False
     assert report["missing_count"] == 1
     video = next(r for r in report["results"] if r["type"] == "video_capture")
     assert video["status"] == "missing"
-    assert "capture" in video["message"].lower()
+    # Named, so an operator knows which physical thing to go and find.
+    assert "D206240701386" in video["message"]
+    assert "not attached" in video["message"]
 
 
 def test_present_but_dark_capture_card_is_degraded_not_missing(client):
@@ -219,7 +223,7 @@ def test_present_but_dark_capture_card_is_degraded_not_missing(client):
     _admin(client)
     _, token = _enrol(client)
     _post(client, token, _report([BLASTER, MAGEWELL], _signal("D206240701386", False)))
-    _register_board(client)
+    _register_board(client, video_capture_serial="D206240701386")
     template_id = _template(client)
 
     report = client.get(f"/api/admin/fleet/templates/{template_id}/gaps").json()[0]
@@ -237,7 +241,7 @@ def test_unknown_signal_state_does_not_fail_a_lab(client):
     _admin(client)
     _, token = _enrol(client)
     _post(client, token, _report([BLASTER, MAGEWELL], _signal("D206240701386", None)))
-    _register_board(client)
+    _register_board(client, video_capture_serial="D206240701386")
     template_id = _template(client)
 
     report = client.get(f"/api/admin/fleet/templates/{template_id}/gaps").json()[0]
@@ -279,7 +283,13 @@ def test_the_same_lab_is_compared_against_every_shuttle(client):
     _post(client, a_token, _report([BLASTER]))
     _post(client, b_token, _report([FTDI, MAGEWELL], _signal("D206240701386", True)))
     _register_board(client)
-    _register_board(client, label="Arty #1", family="zynq_7020", programmer_serial="003017A6FDC3")
+    _register_board(
+        client,
+        label="Arty #1",
+        family="zynq_7020",
+        programmer_serial="003017A6FDC3",
+        video_capture_serial="D206240701386",
+    )
 
     arty_template = _template(
         client,
@@ -327,6 +337,100 @@ def test_gpio_reports_configuration_and_says_it_is_unverified(client):
     assert report["results"][0]["status"] == "satisfied"
     # Honest about what was actually checked.
     assert "not probed" in report["results"][0]["message"]
+
+
+def test_a_capture_card_is_checked_through_the_board_it_serves(client):
+    """One shuttle, two boards, one capture card wired to only one of
+    them. Asking "is there a capture card on this shuttle" would call
+    both labs ready while only one has a picture."""
+    _admin(client)
+    _, token = _enrol(client)
+    _post(client, token, _report([BLASTER, FTDI, MAGEWELL], _signal("D206240701386", True)))
+
+    # The card watches the Cyclone IV. The Arty has none.
+    _register_board(client, video_capture_serial="D206240701386")
+    _register_board(
+        client, label="Arty #1", family="zynq_7020", programmer_serial="003017A6FDC3"
+    )
+
+    civ = _template(client)
+    arty = _template(
+        client,
+        name="Arty Vision Lab",
+        requirements=[
+            {"type": "fpga", "family": "zynq_7020"},
+            {"type": "video_capture", "require_signal": True},
+        ],
+    )
+
+    civ_video = next(
+        r
+        for r in client.get(f"/api/admin/fleet/templates/{civ}/gaps").json()[0]["results"]
+        if r["type"] == "video_capture"
+    )
+    arty_video = next(
+        r
+        for r in client.get(f"/api/admin/fleet/templates/{arty}/gaps").json()[0]["results"]
+        if r["type"] == "video_capture"
+    )
+
+    assert civ_video["status"] == "satisfied"
+    assert arty_video["status"] != "satisfied"
+    assert "Arty #1" in arty_video["message"]
+
+
+def test_an_unrecorded_capture_card_is_not_treated_as_present(client):
+    """Not knowing which card serves a board is different from knowing
+    one does - claiming it passes is the silent wrongness this exists to
+    remove."""
+    _admin(client)
+    _, token = _enrol(client)
+    _post(client, token, _report([BLASTER, MAGEWELL], _signal("D206240701386", True)))
+    _register_board(client)  # no video_capture_serial
+
+    report = client.get(f"/api/admin/fleet/templates/{_template(client)}/gaps").json()[0]
+    video = next(r for r in report["results"] if r["type"] == "video_capture")
+    assert video["status"] == "degraded"
+    assert "No capture card is recorded" in video["message"]
+    assert report["deployable"] is False
+
+
+def test_a_template_with_no_family_still_asks_about_the_shuttle(client):
+    """Without a board in question the shuttle-wide check is the correct
+    one, so that behaviour has to survive."""
+    _admin(client)
+    _, token = _enrol(client)
+    _post(client, token, _report([MAGEWELL], _signal("D206240701386", True)))
+
+    template_id = _template(
+        client,
+        name="Capture only",
+        requirements=[{"type": "video_capture", "require_signal": True}],
+    )
+    report = client.get(f"/api/admin/fleet/templates/{template_id}/gaps").json()[0]
+    assert report["results"][0]["status"] == "satisfied"
+
+
+def test_a_board_can_be_revised_after_registration(client):
+    _admin(client)
+    _, token = _enrol(client)
+    _post(client, token, _report([BLASTER, MAGEWELL], _signal("D206240701386", True)))
+    board_id = _register_board(client).json()["id"]
+
+    updated = client.patch(
+        f"/api/admin/fleet/boards/{board_id}",
+        json={"video_capture_serial": "D206240701386"},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["video_capture_serial"] == "D206240701386"
+    # Untouched fields survive a partial update.
+    assert updated.json()["label"] == "EduPow CIV #10"
+
+    # A serial nothing reported is refused, same as at registration.
+    bad = client.patch(
+        f"/api/admin/fleet/boards/{board_id}", json={"video_capture_serial": "typo"}
+    )
+    assert bad.status_code == 400
 
 
 # ---- the spare side --------------------------------------------------
