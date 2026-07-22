@@ -244,11 +244,22 @@ export interface Board {
   shuttle_name: string | null;
 }
 
+/** Mirrors the backend's discriminated union in
+ *  services/requirements.py. Adding a requirement type means adding a
+ *  member here and a matching subclass there - the two lists are the
+ *  same contract seen from either end, so a mismatch shows up as a type
+ *  error rather than a runtime surprise. */
+export type LabRequirement =
+  | { type: "fpga"; family: string }
+  | { type: "programmer"; signature: string }
+  | { type: "video_capture"; require_signal: boolean }
+  | { type: "gpio" };
+
 export interface LabTemplate {
   id: number;
   name: string;
   description: string | null;
-  requirements: Record<string, unknown>[];
+  requirements: LabRequirement[];
   created_at: string;
 }
 

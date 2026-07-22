@@ -4,6 +4,7 @@ import {
   Deployment,
   Device,
   GapReport,
+  LabRequirement,
   LabTemplate,
   Shuttle,
   ShuttleEnrolled,
@@ -200,7 +201,7 @@ export const getTemplates = () => get<LabTemplate[]>("/api/admin/fleet/templates
 export const createTemplate = (data: {
   name: string;
   description?: string | null;
-  requirements: Record<string, unknown>[];
+  requirements: LabRequirement[];
 }) => post<LabTemplate>("/api/admin/fleet/templates", data);
 export const deleteTemplate = (id: number) =>
   del<MessageResponse>(`/api/admin/fleet/templates/${id}`);

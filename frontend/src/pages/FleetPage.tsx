@@ -14,6 +14,7 @@ import {
   Device,
   GapReport,
   Lab,
+  LabRequirement,
   LabTemplate,
   Shuttle,
   UnclaimedDevice,
@@ -236,6 +237,25 @@ export default function FleetPage() {
     }
   }
 
+  async function handleDeleteTemplate(template: LabTemplate) {
+    if (
+      !confirm(
+        `Delete template "${template.name}"? Any lab bound to it must be unbound first.`,
+      )
+    )
+      return;
+    setBusy(`tpl-${template.id}`);
+    try {
+      await api.deleteTemplate(template.id);
+      showSuccess(`Template ${template.name} deleted`);
+      await refresh();
+    } catch (err) {
+      showError(err instanceof api.ApiError ? err.message : "Failed to delete template");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleDeleteBoard(board: Board) {
     if (!confirm(`Deregister "${board.label}"? The hardware stays; only its registration is removed.`))
       return;
@@ -289,6 +309,15 @@ export default function FleetPage() {
   }
 
   const captureDevices = devices.filter((d) => d.kind === "video_capture");
+  // Suggestions for the programmer field: what the fleet is actually
+  // reporting, so an operator does not have to remember the exact spelling.
+  const knownSignatures = Array.from(
+    new Set(
+      devices
+        .filter((d) => d.kind === "programmer" && d.signature)
+        .map((d) => d.signature as string),
+    ),
+  ).sort();
   const onlineCount = shuttles.filter((s) => s.status === "online").length;
   const blockedGaps = gaps.filter((g) => !g.deployable);
 
@@ -483,6 +512,73 @@ export default function FleetPage() {
           <p className="mt-2 text-xs text-muted-foreground">
             Enrolling issues an agent token, shown once. A machine cannot add itself to the fleet.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Lab templates. Placed before readiness deliberately: this is
+          where the question gets asked, and the next card is the answer. */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Lab templates</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            A template states what a lab needs, once. The system keeps comparing it against every
+            shuttle — nothing here installs or configures anything, it only describes.
+          </p>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Requires</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {templates.length === 0 ? (
+                  <EmptyRow colSpan={3}>
+                    No templates yet. Until one exists there is nothing to check hardware against.
+                  </EmptyRow>
+                ) : (
+                  templates.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell>
+                        <div className="font-medium">{t.name}</div>
+                        {t.description && (
+                          <div className="text-xs text-muted-foreground">{t.description}</div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1.5">
+                          {t.requirements.map((r, i) => {
+                            const d = describeRequirement(r);
+                            return (
+                              <Badge key={i} variant="outline" title={d.detail}>
+                                {d.label}: {d.detail}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={busy === `tpl-${t.id}`}
+                          onClick={() => handleDeleteTemplate(t)}
+                        >
+                          Delete
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <TemplateForm signatures={knownSignatures} onDone={refresh} />
         </CardContent>
       </Card>
 
@@ -1153,6 +1249,241 @@ function DeploymentForm({
         </div>
         <Button type="submit" disabled={saving || !labId || !templateId || !boardId || !port}>
           Bind
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Human-readable summary of one stored requirement.
+ *  Kept exhaustive with a `never` fallthrough: adding a requirement type
+ *  to the union without teaching this function about it is then a
+ *  compile error rather than a row that silently renders as blank. */
+function describeRequirement(req: LabRequirement): { label: string; detail: string } {
+  switch (req.type) {
+    case "fpga":
+      return { label: "FPGA board", detail: familyLabel(req.family) };
+    case "programmer":
+      return { label: "Programmer", detail: req.signature };
+    case "video_capture":
+      return {
+        label: "HDMI capture",
+        detail: req.require_signal ? "live signal required" : "card present is enough",
+      };
+    case "gpio":
+      return { label: "GPIO controller", detail: "assigned to the board" };
+    default: {
+      const exhaustive: never = req;
+      return { label: String(exhaustive), detail: "" };
+    }
+  }
+}
+
+const REQUIREMENT_KINDS: { type: LabRequirement["type"]; label: string; blank: LabRequirement }[] = [
+  { type: "fpga", label: "FPGA board", blank: { type: "fpga", family: FAMILIES[0].value } },
+  { type: "programmer", label: "Programmer", blank: { type: "programmer", signature: "" } },
+  {
+    type: "video_capture",
+    label: "HDMI capture",
+    blank: { type: "video_capture", require_signal: true },
+  },
+  { type: "gpio", label: "GPIO controller", blank: { type: "gpio" } },
+];
+
+/** Builds a lab template: what a lab needs, stated once.
+ *
+ *  One requirement of each type at most. That is not an arbitrary
+ *  restriction - the engine resolves the board in question from the
+ *  first fpga requirement, and a second capture or GPIO entry would
+ *  resolve to the same board's hardware, so repeats can only ever
+ *  disagree with each other. */
+function TemplateForm({
+  signatures,
+  onDone,
+}: {
+  signatures: string[];
+  onDone: () => Promise<void>;
+}) {
+  const { showError, showSuccess } = useToast();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [requirements, setRequirements] = useState<LabRequirement[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const used = new Set(requirements.map((r) => r.type));
+
+  function add(blank: LabRequirement) {
+    setRequirements((current) => [...current, blank]);
+  }
+  function removeAt(index: number) {
+    setRequirements((current) => current.filter((_, i) => i !== index));
+  }
+  function updateAt(index: number, next: LabRequirement) {
+    setRequirements((current) => current.map((r, i) => (i === index ? next : r)));
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || requirements.length === 0) return;
+    setSaving(true);
+    try {
+      await api.createTemplate({
+        name: name.trim(),
+        description: description.trim() || null,
+        requirements,
+      });
+      showSuccess(`Template "${name.trim()}" created`);
+      setName("");
+      setDescription("");
+      setRequirements([]);
+      await onDone();
+    } catch (err) {
+      showError(err instanceof api.ApiError ? err.message : "Failed to create template");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const selectClass =
+    "h-8 rounded-md border border-input bg-transparent px-2 text-sm focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-5 border-t pt-4">
+      <p className="text-sm font-medium">New template</p>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="tpl-name">Name</Label>
+          <Input
+            id="tpl-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Cyclone IV Vision Lab"
+          />
+        </div>
+        <div>
+          <Label htmlFor="tpl-desc">Description (optional)</Label>
+          <Input
+            id="tpl-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Image processing with live HDMI capture"
+          />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <Label>Requirements</Label>
+        {requirements.length === 0 ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            None yet. A template with no requirements would be trivially satisfied by every
+            shuttle, which says nothing — add at least one below.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {requirements.map((req, index) => (
+              <li
+                key={`${req.type}-${index}`}
+                className="flex flex-wrap items-center gap-2 rounded-md border bg-card px-3 py-2"
+              >
+                <Badge variant="secondary">{describeRequirement(req).label}</Badge>
+
+                {req.type === "fpga" && (
+                  <select
+                    aria-label="FPGA family"
+                    className={selectClass}
+                    value={req.family}
+                    onChange={(e) => updateAt(index, { type: "fpga", family: e.target.value })}
+                  >
+                    {FAMILIES.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {req.type === "programmer" && (
+                  <>
+                    {/* A datalist, not a select: the suggestions are the
+                        signatures the fleet is currently reporting, but a
+                        template may legitimately name hardware that is not
+                        plugged in yet. */}
+                    <input
+                      aria-label="Programmer signature"
+                      list="known-signatures"
+                      className={`${selectClass} min-w-[14rem] font-mono text-xs`}
+                      value={req.signature}
+                      placeholder="altera-usb-blaster"
+                      onChange={(e) =>
+                        updateAt(index, { type: "programmer", signature: e.target.value })
+                      }
+                    />
+                    <datalist id="known-signatures">
+                      {signatures.map((s) => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
+                  </>
+                )}
+
+                {req.type === "video_capture" && (
+                  <select
+                    aria-label="Signal requirement"
+                    className={selectClass}
+                    value={req.require_signal ? "yes" : "no"}
+                    onChange={(e) =>
+                      updateAt(index, {
+                        type: "video_capture",
+                        require_signal: e.target.value === "yes",
+                      })
+                    }
+                  >
+                    <option value="yes">live signal required</option>
+                    <option value="no">card present is enough</option>
+                  </select>
+                )}
+
+                {req.type === "gpio" && (
+                  <span className="text-xs text-muted-foreground">
+                    the board must have a controller assigned
+                  </span>
+                )}
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="ml-auto"
+                  onClick={() => removeAt(index)}
+                >
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {REQUIREMENT_KINDS.map((kind) => (
+            <Button
+              key={kind.type}
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={used.has(kind.type)}
+              title={used.has(kind.type) ? "Already in this template" : undefined}
+              onClick={() => add(kind.blank)}
+            >
+              + {kind.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-end">
+        <Button type="submit" disabled={saving || !name.trim() || requirements.length === 0}>
+          Create template
         </Button>
       </div>
     </form>
