@@ -228,3 +228,101 @@ def scp_installer(host: str, user: str, password: str, local_path: str, filename
             + (tail[-1] if tail else "scp failed")
         )
     return remote
+
+
+# --- SSH connectivity check + hardware detection (wizard step 1 -> 2) ---
+
+_SSH_OPTS = [
+    "-o", "StrictHostKeyChecking=no",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "ConnectTimeout=10",
+]
+
+# Emitted over SSH and parsed line by line. Uses echo (no printf \\n) so it
+# needs no escaping, and every probe tolerates the tool or path being
+# absent - a fresh shuttle may not have the udev symlinks yet, in which
+# case the raw presence (lsusb) is still reported.
+_DETECT_SCRIPT = """
+PVE=$(pveversion 2>/dev/null | head -1)
+UB=$(lsusb 2>/dev/null | grep -iE '09fb:|Altera|USB-Blaster' | head -1)
+UBL=$(ls /dev/usb-blaster 2>/dev/null)
+MW=$(lsusb 2>/dev/null | grep -i magewell | head -1)
+MWL=$(ls /dev/magewell 2>/dev/null)
+echo "PVE=$PVE"
+echo "UB=$UB"
+echo "UBL=$UBL"
+echo "MW=$MW"
+echo "MWL=$MWL"
+for v in $(ls /dev/v4l/by-id/ 2>/dev/null); do echo "VID=/dev/v4l/by-id/$v"; done
+for v in $(ls /dev/video* 2>/dev/null); do echo "VDEV=$v"; done
+for s in $(ls /dev/serial/by-id/ 2>/dev/null); do echo "SER=/dev/serial/by-id/$s"; done
+"""
+
+
+def _ssh(host, user, password, remote_cmd, timeout=40):
+    cmd = ["sshpass", "-e", "ssh", *_SSH_OPTS, f"{user}@{host}", remote_cmd]
+    env = {**os.environ, "SSHPASS": password}
+    try:
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout)
+    except FileNotFoundError:
+        raise ProvisionError(
+            "sshpass is not installed in the portal container - "
+            "apt-get install -y sshpass openssh-client"
+        )
+    except subprocess.TimeoutExpired:
+        raise ProvisionError("Timed out reaching the shuttle over SSH.")
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def check_ssh(host, user, password):
+    """Try to log in and read the machine\'s identity. Returns (ok, message)."""
+    rc, out, err = _ssh(host, user, password, "pveversion 2>/dev/null | head -1 || uname -srm")
+    if rc == 0:
+        line = (out.strip() or "connected").splitlines()
+        return True, (line[0] if line else "connected")
+    msg = (err or out or "SSH connection failed").strip().splitlines()
+    return False, (msg[-1] if msg else "SSH connection failed")
+
+
+def detect_devices(host, user, password):
+    """Scan the shuttle for the hardware the lab containers will bind."""
+    rc, out, err = _ssh(host, user, password, _DETECT_SCRIPT)
+    if rc != 0 and not out.strip():
+        msg = (err or "device scan failed").strip().splitlines()
+        raise ProvisionError(msg[-1] if msg else "Could not scan the shuttle")
+
+    found = {"pve": "", "ub": "", "ubl": "", "mw": "", "mwl": "", "vid": [], "vdev": [], "ser": []}
+    for line in out.splitlines():
+        if line.startswith("PVE="):
+            found["pve"] = line[4:]
+        elif line.startswith("UBL="):
+            found["ubl"] = line[4:]
+        elif line.startswith("UB="):
+            found["ub"] = line[3:]
+        elif line.startswith("MWL="):
+            found["mwl"] = line[4:]
+        elif line.startswith("MW="):
+            found["mw"] = line[3:]
+        elif line.startswith("VID="):
+            found["vid"].append(line[4:])
+        elif line.startswith("VDEV="):
+            found["vdev"].append(line[5:])
+        elif line.startswith("SER="):
+            found["ser"].append(line[4:])
+
+    videos = found["vid"] or found["vdev"]
+    return {
+        "pve": found["pve"],
+        "usb_blaster": {
+            "present": bool(found["ub"]),
+            "path": found["ubl"] or "/dev/usb-blaster",
+            "info": found["ub"],
+        },
+        "capture": {
+            "present": bool(found["mw"]),
+            "path": found["mwl"] or "/dev/magewell",
+            "info": found["mw"],
+        },
+        "videos": videos,
+        "serial": found["ser"],
+    }

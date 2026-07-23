@@ -20,10 +20,13 @@ from app.database import get_db
 from app.deps import require_admin
 from app.models import Shuttle
 from app.schemas import (
+    DetectedDevices,
     InstallerUploaded,
     ProvisionJobStarted,
     ProvisionJobStatus,
     ProvisionRequest,
+    SshCheckResult,
+    SshCredentials,
 )
 from app.services import provisioning
 
@@ -137,3 +140,37 @@ async def upload_installer(
         except OSError:
             pass
     return InstallerUploaded(path=remote)
+
+
+@router.post("/shuttles/{shuttle_id}/check-ssh", response_model=SshCheckResult)
+def check_ssh_endpoint(shuttle_id: int, payload: SshCredentials, db: Session = Depends(get_db)):
+    """Step 1 of the wizard: prove we can actually log into the machine
+    before asking anything else, and show what answered."""
+    shuttle = db.get(Shuttle, shuttle_id)
+    if shuttle is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Shuttle not found")
+    host = (payload.ssh_host or shuttle.address or "").strip()
+    if not host:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No address to reach this shuttle over SSH.")
+    try:
+        ok, message = provisioning.check_ssh(host, payload.ssh_user, payload.ssh_password)
+    except provisioning.ProvisionError as exc:
+        return SshCheckResult(ok=False, message=str(exc))
+    return SshCheckResult(ok=ok, message=message)
+
+
+@router.post("/shuttles/{shuttle_id}/detect-devices", response_model=DetectedDevices)
+def detect_devices_endpoint(shuttle_id: int, payload: SshCredentials, db: Session = Depends(get_db)):
+    """Step 2: scan the shuttle over SSH for the USB-Blaster, capture card
+    and video nodes, so the operator confirms detected hardware instead of
+    typing raw device paths."""
+    shuttle = db.get(Shuttle, shuttle_id)
+    if shuttle is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Shuttle not found")
+    host = (payload.ssh_host or shuttle.address or "").strip()
+    if not host:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No address to reach this shuttle over SSH.")
+    try:
+        return provisioning.detect_devices(host, payload.ssh_user, payload.ssh_password)
+    except provisioning.ProvisionError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))

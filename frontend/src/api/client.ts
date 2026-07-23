@@ -4,7 +4,10 @@ import {
   Deployment,
   Device,
   GapReport,
+  DetectedDevices,
   InstallerUploaded,
+  SshCheckResult,
+  SshCredentials,
   LabRequirement,
   LabTemplate,
   ScanResult,
@@ -268,11 +271,14 @@ export function uploadInstaller(
           reject(new ApiError(xhr.status, "Unexpected response from the server"));
         }
       } else {
-        let detail = xhr.statusText;
+        let detail = xhr.statusText || `Upload failed (HTTP ${xhr.status})`;
         try {
           detail = extractErrorMessage(JSON.parse(xhr.responseText).detail, detail);
         } catch {
           // response body was not JSON
+        }
+        if (xhr.status === 413) {
+          detail = "The installer is larger than the portal currently accepts — raise nginx client_max_body_size.";
         }
         reject(new ApiError(xhr.status, detail));
       }
@@ -281,5 +287,10 @@ export function uploadInstaller(
     xhr.send(form);
   });
 }
+
+export const checkSsh = (id: number, creds: SshCredentials) =>
+  post<SshCheckResult>(`/api/admin/fleet/shuttles/${id}/check-ssh`, creds);
+export const detectDevices = (id: number, creds: SshCredentials) =>
+  post<DetectedDevices>(`/api/admin/fleet/shuttles/${id}/detect-devices`, creds);
 
 export { ApiError };

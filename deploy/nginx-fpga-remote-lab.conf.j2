@@ -86,6 +86,19 @@ server {
         proxy_read_timeout 300s;
     }
 
+    # The wizard uploads a Quartus installer (multi-GB) the portal then
+    # scps to the shuttle. This one path lifts the body limit and streams
+    # straight through instead of buffering the whole upload to disk
+    # first. Before the SPA location so this regex wins.
+    location ~ ^/api/admin/fleet/shuttles/[0-9]+/upload-installer$ {
+        client_max_body_size 4g;
+        proxy_request_buffering off;
+        proxy_pass http://127.0.0.1:8001;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # Everything else: the SPA and /api/* - our own FastAPI app.
     location / {
         proxy_pass http://127.0.0.1:8001;
