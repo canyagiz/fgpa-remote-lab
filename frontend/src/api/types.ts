@@ -343,6 +343,10 @@ export interface ProvisionJobStatus {
   log: string[];
 }
 
+export interface InstallerUploaded {
+  path: string;
+}
+
 export class ApiError extends Error {
   status: number;
   // Set from the response's Retry-After header when present (e.g. the

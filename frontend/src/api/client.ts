@@ -4,6 +4,7 @@ import {
   Deployment,
   Device,
   GapReport,
+  InstallerUploaded,
   LabRequirement,
   LabTemplate,
   ScanResult,
@@ -236,5 +237,49 @@ export const provisionShuttle = (id: number, data: ProvisionRequest) =>
   post<ProvisionJobStarted>(`/api/admin/fleet/shuttles/${id}/provision`, data);
 export const getProvisionStatus = (id: number, jobId: string) =>
   get<ProvisionJobStatus>(`/api/admin/fleet/shuttles/${id}/provision/${jobId}`);
+
+// Multipart upload with progress, so a large installer picked in the
+// admin's browser can be streamed through the portal to the shuttle. Uses
+// XHR rather than the fetch helper above because only XHR reports upload
+// progress, and this is the one request that sends a file, not JSON.
+export function uploadInstaller(
+  id: number,
+  creds: { ssh_user: string; ssh_password: string; ssh_host?: string | null },
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<InstallerUploaded> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("ssh_user", creds.ssh_user);
+    form.append("ssh_password", creds.ssh_password);
+    if (creds.ssh_host) form.append("ssh_host", creds.ssh_host);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/admin/fleet/shuttles/${id}/upload-installer`);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as InstallerUploaded);
+        } catch {
+          reject(new ApiError(xhr.status, "Unexpected response from the server"));
+        }
+      } else {
+        let detail = xhr.statusText;
+        try {
+          detail = extractErrorMessage(JSON.parse(xhr.responseText).detail, detail);
+        } catch {
+          // response body was not JSON
+        }
+        reject(new ApiError(xhr.status, detail));
+      }
+    };
+    xhr.onerror = () => reject(new ApiError(0, "Upload failed — is the network up?"));
+    xhr.send(form);
+  });
+}
 
 export { ApiError };

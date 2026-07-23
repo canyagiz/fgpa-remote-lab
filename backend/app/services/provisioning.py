@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -187,3 +188,43 @@ def _run(job: ProvisionJob, ssh_host: str, extra_vars: dict) -> None:
             except OSError:
                 pass
         job.finished_at = datetime.utcnow()
+
+
+# --- Quartus installer transfer (browser upload -> scp to the shuttle) --
+
+def safe_installer_name(name: str) -> str:
+    """A filename safe to drop in /root on the shuttle: basename only,
+    exotic characters flattened, never empty."""
+    base = os.path.basename((name or "").strip())
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    return base or "installer.run"
+
+
+def scp_installer(host: str, user: str, password: str, local_path: str, filename: str) -> str:
+    """Copy a local file to /root/<name> on the shuttle over scp.
+
+    The password goes through the SSHPASS env var, never the command line.
+    Returns the remote path, which becomes quartus_installer_path.
+    """
+    remote = f"/root/{safe_installer_name(filename)}"
+    cmd = [
+        "sshpass", "-e", "scp",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        local_path, f"{user}@{host}:{remote}",
+    ]
+    env = {**os.environ, "SSHPASS": password}
+    try:
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise ProvisionError(
+            "sshpass is not installed in the portal container - "
+            "apt-get install -y sshpass openssh-client"
+        )
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "scp failed").strip().splitlines()
+        raise ProvisionError(
+            "Could not copy the installer to the shuttle: "
+            + (tail[-1] if tail else "scp failed")
+        )
+    return remote

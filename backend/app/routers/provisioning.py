@@ -9,13 +9,22 @@ that shuttle into a working node.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import asyncio
+import os
+import tempfile
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_admin
 from app.models import Shuttle
-from app.schemas import ProvisionJobStarted, ProvisionJobStatus, ProvisionRequest
+from app.schemas import (
+    InstallerUploaded,
+    ProvisionJobStarted,
+    ProvisionJobStatus,
+    ProvisionRequest,
+)
 from app.services import provisioning
 
 router = APIRouter(
@@ -79,3 +88,52 @@ def provision_status(
     if job is None or job.shuttle_id != shuttle_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such provisioning job")
     return _status(job)
+
+
+@router.post(
+    "/shuttles/{shuttle_id}/upload-installer",
+    response_model=InstallerUploaded,
+)
+async def upload_installer(
+    shuttle_id: int,
+    file: UploadFile = File(...),
+    ssh_user: str = Form(...),
+    ssh_password: str = Form(...),
+    ssh_host: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    """Receive a Quartus installer from the admin's browser and drop it on
+    the shuttle over scp, so it can be picked straight from their own
+    machine instead of being placed there by hand first. Returns the
+    remote path, which the wizard then passes as quartus_installer_path.
+    """
+    shuttle = db.get(Shuttle, shuttle_id)
+    if shuttle is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Shuttle not found")
+    host = (ssh_host or shuttle.address or "").strip()
+    if not host:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No address to reach this shuttle over SSH.")
+
+    # Stream the upload straight to a temp file so a multi-GB installer
+    # never sits in memory, then hand it to scp on a worker thread.
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".run")
+    try:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            tmp.write(chunk)
+        tmp.close()
+        try:
+            remote = await asyncio.to_thread(
+                provisioning.scp_installer,
+                host, ssh_user, ssh_password, tmp.name, file.filename or "installer.run",
+            )
+        except provisioning.ProvisionError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+    return InstallerUploaded(path=remote)

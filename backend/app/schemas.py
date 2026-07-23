@@ -704,3 +704,11 @@ class ProvisionJobStatus(BaseModel):
     # The whole log so far; the client remembers how many lines it has
     # already rendered and appends only the rest.
     log: list[str]
+
+
+# ---- Installer upload (setup wizard) ---------------------------------
+
+
+class InstallerUploaded(BaseModel):
+    # Where the uploaded installer now lives on the shuttle.
+    path: str
