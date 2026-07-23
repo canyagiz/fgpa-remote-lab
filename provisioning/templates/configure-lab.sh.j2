@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Runs INSIDE the shuttle's lab (docker) container. Everything is pulled
+# from the internet - Docker, the hardware repo, the images. No golden
+# image, nothing copied from the master. Generated for {{ inventory_hostname }}.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+echo "==> Base packages"
+apt-get update -qq
+apt-get install -y --no-install-recommends git ca-certificates curl
+
+echo "==> Docker Engine (get.docker.com)"
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL https://get.docker.com | sh
+fi
+systemctl enable --now docker || true
+
+echo "==> Hardware repo (compose, Dockerfiles, configs, overlays, shims)"
+if [ ! -d /opt/fpga-lab/.git ]; then
+  git clone --branch {{ hardware_repo_ref }} {{ hardware_repo_url }} /opt/fpga-lab
+else
+  git -C /opt/fpga-lab pull --ff-only
+fi
+install -m 0600 /root/lab.env /opt/fpga-lab/.env
+cd /opt/fpga-lab
+
+{% if needs_quartus | bool %}
+echo "==> Quartus programmer (operator-provided, licensed)"
+if [ ! -x "{{ quartus_bin_dir }}/quartus_pgm" ]; then
+  chmod +x /root/quartus-installer
+  # Flags vary by Quartus version; --mode unattended is the common one.
+  # If your installer rejects these, run it once by hand to learn its
+  # unattended flags and set them here.
+  /root/quartus-installer --mode unattended --installdir "{{ intelfpga_dir }}" \
+    --accept_eula 1
+fi
+{% endif %}
+
+{% if image_strategy == 'build' %}
+echo "==> Building images from the hardware repo"
+docker build -t fpga-lab:latest -f FPGA_Vision_Remote_Lab_experiment/Dockerfile FPGA_Vision_Remote_Lab_experiment
+{% if 'arty' in shuttle_boards %}
+docker build -t fpga-lab-z7:latest -f Dockerfile.z7 .
+{% endif %}
+{% else %}
+echo "==> Pulling prebuilt images from {{ image_registry }}"
+docker pull {{ image_registry }}/fpga-lab:latest
+docker tag  {{ image_registry }}/fpga-lab:latest fpga-lab:latest
+{% if 'arty' in shuttle_boards %}
+docker pull {{ image_registry }}/fpga-lab-z7:latest
+docker tag  {{ image_registry }}/fpga-lab-z7:latest fpga-lab-z7:latest
+{% endif %}
+{% endif %}
+
+echo "==> Bringing up this shuttle's board services"
+docker compose up -d {{ compose_services | join(' ') }}
+docker compose ps

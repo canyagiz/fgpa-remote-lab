@@ -1,0 +1,63 @@
+---
+# Fleet-wide defaults. Anything specific to one machine lives in
+# inventory/host_vars/<shuttle>.yml and overrides what is here.
+
+# The portal every agent reports to. This is the one central service; a
+# shuttle never runs its own copy of it.
+portal_master_url: "http://10.30.70.24:8000"
+
+# --- Source repositories (everything is pulled, nothing is snapshotted) -
+agent_repo_url: "https://github.com/canyagiz/fpga-remote-lab-agent.git"
+agent_repo_ref: "main"
+hardware_repo_url: "https://github.com/canyagiz/fpga-remote-lab-hardware.git"
+hardware_repo_ref: "main"
+
+# --- Board taxonomy ----------------------------------------------------
+# Intel/Altera families need Quartus; Xilinx (arty) does not. The compose
+# service name each board maps to lives in the hardware repo.
+intel_boards: ["cx", "civ", "cv"]
+board_service_map:
+  cx: "fpga-lab-cx"
+  civ: "fpga-lab-civ"
+  cv: "fpga-lab-cv"
+  arty: "fpga-lab-arty"
+
+# --- LXC base template (fetched from Proxmox's CDN if missing) ----------
+lxc_template: "debian-12-standard_12.7-1_amd64.tar.zst"
+lxc_template_storage: "local"
+lxc_rootfs_storage: "local-lvm"
+lxc_bridge: "vmbr0"
+
+# --- The lab (docker) container ----------------------------------------
+lab_ctid: 300
+lab_hostname: "docker"
+lab_disk_gb: 40
+lab_cores: 4
+lab_memory_mb: 8192
+
+# --- The agent container -----------------------------------------------
+agent_ctid: 400
+agent_hostname: "fpga-lab-agent"
+agent_disk_gb: 8
+agent_cores: 1
+agent_memory_mb: 1024
+
+# --- Image strategy ----------------------------------------------------
+# "build" = build from the hardware repo's Dockerfiles at provision time
+#           (fully self-contained, no registry, but slower).
+# "pull"  = docker pull prebuilt images from image_registry (needs CI to
+#           publish them first).
+image_strategy: "build"
+image_registry: "ghcr.io/canyagiz"
+
+# --- Quartus install location (Intel boards only) ----------------------
+intelfpga_dir: "/opt/intelFPGA"
+quartus_bin_dir: "/opt/intelFPGA/25.1std/qprogrammer/bin"
+
+# --- Agent runtime -----------------------------------------------------
+agent_interval_seconds: 30
+# JTAG probing MUST stay off while any lab can be booked: a probe takes
+# the JTAG chain lock and kills whatever session is running on that board.
+agent_include_jtag: false
+# Internal HTTP to the portal on the lab network - no cert to verify.
+agent_verify_tls: false

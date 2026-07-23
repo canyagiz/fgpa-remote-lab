@@ -1,0 +1,40 @@
+---
+# One physical shuttle: how to reach its Proxmox host, and what hardware
+# is wired to it. Copy to shuttle13.yml and fill in.
+#
+# NEVER put the real agent_token in here. It is injected at run time with
+# -e agent_token=... (the portal passes a freshly rotated token). A token
+# in a committed file is a leaked credential.
+
+ansible_host: 10.30.70.13
+ansible_user: root              # the SSH user entered in the wizard
+
+# Which boards are physically attached to THIS shuttle. Drives which
+# compose services come up and whether Quartus is needed at all.
+shuttle_boards:
+  - civ                         # Cyclone IV  (Intel  -> needs Quartus)
+  # - cx                        # Cyclone V/X (Intel  -> needs Quartus)
+  # - cv                        # Cyclone V   (Intel  -> needs Quartus)
+  # - arty                      # Arty Z7     (Xilinx -> no Quartus)
+
+# Per-shuttle device map -> rendered into the lab container's .env.
+# This is the output of the wizard's "detected devices" step. Prefer the
+# stable udev symlinks (hardware repo's udev/) over raw bus paths, which
+# renumber on replug.
+device_map:
+  usb_blaster: "/dev/usb-blaster"
+  magewell: "/dev/magewell"
+  video0: "/dev/v4l/by-id/usb-Magewell_USB_Capture_HDMI_XXXXXXXX-video-index0"
+  video1: "/dev/v4l/by-id/usb-Magewell_USB_Capture_HDMI_XXXXXXXX-video-index1"
+  arty_usb_bus: "/dev/bus/usb"
+
+# Each board's UART bridge (host:port the lab container talks to).
+board_uart:
+  civ: { host: "10.30.70.50", port: 20000 }
+  # cx:   { host: "169.254.28.129", port: 20000 }
+  # cv:   { host: "169.254.28.131", port: 20000 }
+  # arty: { host: "10.30.70.45", port: 20000 }
+
+# Intel boards only: path ON THE SHUTTLE to the operator-provided,
+# licensed Quartus programmer installer. Leave "" for Arty-only shuttles.
+quartus_installer_path: ""      # e.g. /root/QuartusProgrammerSetup-25.1std.run

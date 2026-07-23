@@ -1,0 +1,6 @@
+# The real inventory names live machines and is run with live tokens via
+# -e. Only the .example templates belong in git.
+inventory/hosts.ini
+inventory/host_vars/*.yml
+!inventory/host_vars/*.yml.example
+*.retry

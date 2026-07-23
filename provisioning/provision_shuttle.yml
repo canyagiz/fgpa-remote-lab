@@ -1,0 +1,191 @@
+---
+# Turn a Proxmox-VE machine into a shuttle: a lab container for its boards
+# and an agent container that reports them. Everything is pulled fresh -
+# no golden image. Driven entirely through the `pct` CLI over SSH, so it
+# needs no Proxmox API token and no Ansible Galaxy collections.
+#
+#   ansible-playbook -i inventory/hosts.ini provision_shuttle.yml \
+#       -l shuttle13 -e "agent_token=frl_13_..." --ask-pass
+
+- name: Provision an FPGA remote-lab shuttle
+  hosts: shuttles
+  become: true
+  gather_facts: true
+
+  vars:
+    stage_dir: /var/lib/fpga-lab-provisioning
+
+  pre_tasks:
+    - name: The agent token must be supplied at run time, never from a file
+      ansible.builtin.assert:
+        that: [ "agent_token is defined", "agent_token | length > 0" ]
+        fail_msg: >-
+          Pass the shuttle's token with -e agent_token=... The portal
+          rotates a fresh one and passes it here; it is never committed.
+
+    - name: This host must be a Proxmox VE node
+      ansible.builtin.command: pveversion
+      changed_when: false
+
+    - name: Work out which board families are present
+      ansible.builtin.set_fact:
+        needs_quartus: "{{ (shuttle_boards | intersect(intel_boards) | length) > 0 }}"
+        compose_services: >-
+          {{ (shuttle_boards | map('extract', board_service_map) | list)
+             + ['fpga-labfiles'] }}
+
+    - name: Intel boards need a licensed Quartus installer (bring-your-own)
+      ansible.builtin.assert:
+        that: [ "quartus_installer_path | length > 0" ]
+        fail_msg: >-
+          {{ shuttle_boards }} includes an Intel/Altera board, which needs
+          Quartus. Intel gates the download behind an account + EULA, so it
+          cannot be fetched automatically. Put your licensed installer on
+          the shuttle and set quartus_installer_path. Arty-only shuttles
+          need none of this.
+      when: needs_quartus | bool
+
+    - name: Staging directory on the shuttle
+      ansible.builtin.file:
+        path: "{{ stage_dir }}"
+        state: directory
+        mode: "0700"
+
+  tasks:
+    # ================================================================
+    #  LAB CONTAINER  (Docker + the board services for this shuttle)
+    # ================================================================
+    - name: Ensure the Debian LXC template is downloaded
+      ansible.builtin.command: "pveam download {{ lxc_template_storage }} {{ lxc_template }}"
+      args:
+        creates: "/var/lib/vz/template/cache/{{ lxc_template }}"
+
+    - name: Does the lab container already exist?
+      ansible.builtin.command: "pct status {{ lab_ctid }}"
+      register: lab_status
+      changed_when: false
+      failed_when: false
+
+    - name: Create the lab (docker) container
+      # privileged + nesting: Docker runs inside the LXC, and the board
+      # USB/JTAG/video devices have to be passed through to it.
+      ansible.builtin.command: >-
+        pct create {{ lab_ctid }} {{ lxc_template_storage }}:vztmpl/{{ lxc_template }}
+        --hostname {{ lab_hostname }}
+        --cores {{ lab_cores }} --memory {{ lab_memory_mb }}
+        --rootfs {{ lxc_rootfs_storage }}:{{ lab_disk_gb }}
+        --net0 name=eth0,bridge={{ lxc_bridge }},ip=dhcp
+        --features nesting=1 --unprivileged 0 --onboot 1 --start 0
+      when: "'does not exist' in lab_status.stderr or lab_status.rc != 0"
+
+    - name: Pass the mapped hardware devices into the lab container
+      # This is the genuinely hardware-specific step: the lab LXC must see
+      # the host's USB/video nodes before docker-compose can bind-mount
+      # them into the board containers. `optional` so an absent device does
+      # not block the container from starting.
+      ansible.builtin.blockinfile:
+        path: "/etc/pve/lxc/{{ lab_ctid }}.conf"
+        marker: "# {mark} fpga-lab device passthrough"
+        block: |
+          lxc.cgroup2.devices.allow: c 189:* rwm
+          lxc.cgroup2.devices.allow: c 81:* rwm
+          lxc.mount.entry: {{ device_map.usb_blaster | default('/dev/usb-blaster') }} {{ (device_map.usb_blaster | default('/dev/usb-blaster')) | regex_replace('^/', '') }} none bind,optional,create=file
+          lxc.mount.entry: {{ device_map.magewell | default('/dev/magewell') }} {{ (device_map.magewell | default('/dev/magewell')) | regex_replace('^/', '') }} none bind,optional,create=file
+          lxc.mount.entry: /dev/bus/usb dev/bus/usb none bind,optional,create=dir
+
+    - name: Start the lab container
+      ansible.builtin.command: "pct start {{ lab_ctid }}"
+      register: lab_start
+      changed_when: "'already running' not in (lab_start.stderr | default(''))"
+      failed_when: lab_start.rc != 0 and 'already running' not in lab_start.stderr
+
+    - name: Copy the operator's Quartus installer into the lab container
+      ansible.builtin.command: "pct push {{ lab_ctid }} {{ quartus_installer_path }} /root/quartus-installer"
+      when: needs_quartus | bool
+
+    - name: Render the lab .env (device map -> container)
+      ansible.builtin.template:
+        src: templates/lab.env.j2
+        dest: "{{ stage_dir }}/lab.env"
+        mode: "0600"
+
+    - name: Render the in-container lab configure script
+      ansible.builtin.template:
+        src: templates/configure-lab.sh.j2
+        dest: "{{ stage_dir }}/configure-lab.sh"
+        mode: "0700"
+
+    - name: Push .env and configure script into the lab container
+      ansible.builtin.command: "pct push {{ lab_ctid }} {{ stage_dir }}/{{ item.src }} {{ item.dest }}"
+      loop:
+        - { src: "lab.env", dest: "/root/lab.env" }
+        - { src: "configure-lab.sh", dest: "/root/configure-lab.sh" }
+
+    - name: Configure the lab container (docker, clone, build/pull, up)
+      # Long-running: first-time image builds and Quartus install take a
+      # while. In the portal this runs async with its output streamed to
+      # the wizard.
+      ansible.builtin.command: "pct exec {{ lab_ctid }} -- bash /root/configure-lab.sh"
+      register: lab_configure
+      changed_when: true
+
+    # ================================================================
+    #  AGENT CONTAINER  (reports this shuttle's hardware to the portal)
+    # ================================================================
+    - name: Does the agent container already exist?
+      ansible.builtin.command: "pct status {{ agent_ctid }}"
+      register: agent_status
+      changed_when: false
+      failed_when: false
+
+    - name: Create the agent container
+      # unprivileged is enough: the agent only reads /sys to enumerate the
+      # USB tree - it needs no device passthrough and no privilege.
+      ansible.builtin.command: >-
+        pct create {{ agent_ctid }} {{ lxc_template_storage }}:vztmpl/{{ lxc_template }}
+        --hostname {{ agent_hostname }}
+        --cores {{ agent_cores }} --memory {{ agent_memory_mb }}
+        --rootfs {{ lxc_rootfs_storage }}:{{ agent_disk_gb }}
+        --net0 name=eth0,bridge={{ lxc_bridge }},ip=dhcp
+        --unprivileged 1 --onboot 1 --start 1
+      when: "'does not exist' in agent_status.stderr or agent_status.rc != 0"
+
+    - name: Ensure the agent container is running
+      ansible.builtin.command: "pct start {{ agent_ctid }}"
+      register: agent_start
+      changed_when: "'already running' not in (agent_start.stderr | default(''))"
+      failed_when: agent_start.rc != 0 and 'already running' not in agent_start.stderr
+
+    - name: Render the agent config, token env, and configure script
+      ansible.builtin.template:
+        src: "templates/{{ item.src }}"
+        dest: "{{ stage_dir }}/{{ item.dest }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { src: "agent.conf.j2", dest: "agent.conf", mode: "0600" }
+        - { src: "agent.env.j2", dest: "agent.env", mode: "0600" }
+        - { src: "configure-agent.sh.j2", dest: "configure-agent.sh", mode: "0700" }
+
+    - name: Push agent files into the agent container
+      ansible.builtin.command: "pct push {{ agent_ctid }} {{ stage_dir }}/{{ item }} /root/{{ item }}"
+      loop: [ "agent.conf", "agent.env", "configure-agent.sh" ]
+
+    - name: Configure the agent container (clone, install, enable service)
+      ansible.builtin.command: "pct exec {{ agent_ctid }} -- bash /root/configure-agent.sh"
+      changed_when: true
+
+  post_tasks:
+    - name: Remove the rendered token from the shuttle's staging dir
+      # It is now inside the agent container at mode 0600; there is no
+      # reason to leave a second copy lying on the host.
+      ansible.builtin.file:
+        path: "{{ stage_dir }}/agent.env"
+        state: absent
+
+    - name: Where to confirm it worked
+      ansible.builtin.debug:
+        msg: >-
+          Done. The agent should report within {{ agent_interval_seconds }}s;
+          watch the shuttle turn Online in the fleet page, or run
+          `pct exec {{ agent_ctid }} -- systemctl status fpga-lab-agent` on
+          the shuttle.

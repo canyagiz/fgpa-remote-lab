@@ -1,0 +1,16 @@
+# Managed by the provisioning wizard - do not edit by hand.
+# The token is deliberately NOT here; it lives in agent.env (a systemd
+# EnvironmentFile) so it never sits in a file that might be world-readable
+# or show up in a process argument list.
+[agent]
+master_url = {{ portal_master_url }}
+interval_seconds = {{ agent_interval_seconds }}
+
+# ACTIVE JTAG probing. Off, and it must stay off while any lab on this
+# shuttle can be booked: a probe takes the JTAG chain lock and ends
+# whatever session is running on that board.
+include_jtag = {{ agent_include_jtag | string | lower }}
+
+# Internal HTTP to the portal on the lab network - no certificate to
+# verify on this hop.
+verify_tls = {{ agent_verify_tls | string | lower }}

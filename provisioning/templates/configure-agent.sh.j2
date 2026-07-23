@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Runs INSIDE the shuttle's agent container. Clones the agent from GitHub
+# and wires up its systemd service. The config + token were pushed to
+# /root by Ansible. Generated for {{ inventory_hostname }}.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+echo "==> Base packages"
+apt-get update -qq
+apt-get install -y --no-install-recommends git python3 python3-pip ca-certificates
+
+echo "==> Agent repo"
+if [ ! -d /opt/fpga-remote-lab-agent/.git ]; then
+  git clone --branch {{ agent_repo_ref }} {{ agent_repo_url }} /opt/fpga-remote-lab-agent
+else
+  git -C /opt/fpga-remote-lab-agent pull --ff-only
+fi
+if [ -f /opt/fpga-remote-lab-agent/requirements.txt ]; then
+  pip3 install --break-system-packages -r /opt/fpga-remote-lab-agent/requirements.txt
+fi
+
+echo "==> Config + token into place"
+install -d -m 0755 /etc/fpga-lab-agent
+install -m 0600 /root/agent.conf /etc/fpga-lab-agent/agent.conf
+install -m 0600 /root/agent.env  /etc/fpga-lab-agent/agent.env
+shred -u /root/agent.env 2>/dev/null || rm -f /root/agent.env
+
+echo "==> systemd service"
+install -m 0644 /opt/fpga-remote-lab-agent/deploy/fpga-lab-agent.service \
+  /etc/systemd/system/fpga-lab-agent.service
+systemctl daemon-reload
+systemctl enable --now fpga-lab-agent.service
+sleep 2
+systemctl --no-pager --full status fpga-lab-agent.service | head -8 || true
